@@ -7,7 +7,7 @@ from typing import List, Optional, Union
 
 import openai
 from arango import ArangoClient
-from fastapi import File, Form, HTTPException, UploadFile
+from fastapi import Body, File, Form, HTTPException, UploadFile
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
 from langchain_community.graphs.arangodb_graph import ArangoGraph
@@ -34,7 +34,7 @@ logger = CustomLogger("OPEA_DATAPREP_ARANGODB")
 logflag = os.getenv("LOGFLAG", False)
 
 
-# Neo4J configuration
+# ArangoDB configuration
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_DB_NAME = os.getenv("ARANGO_DB_NAME", "_system")
 ARANGO_USERNAME = os.getenv("ARANGO_USERNAME", "root")
@@ -78,7 +78,7 @@ ALLOWED_RELATIONSHIPS = os.getenv("ALLOWED_RELATIONSHIPS", []) # [("Person", "kn
 NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", ['description'])
 RELATIONSHIP_PROPERTIES = os.getenv("RELATIONSHIP_PROPERTIES", ['description'])
 
-@OpeaComponentRegistry.register("OPEA_DATAPREP_ARANGODBgit ")
+@OpeaComponentRegistry.register("OPEA_DATAPREP_ARANGODB")
 class OpeaArangoDataprep(OpeaComponent):
     """Dataprep component for ArangoDB ingestion and search services."""
 
@@ -86,43 +86,41 @@ class OpeaArangoDataprep(OpeaComponent):
         super().__init__(name, ServiceType.DATAPREP.name.lower(), description, config)
         self.upload_folder = "./uploaded_files/"
 
-        if ALLOWED_NODES and isinstance(ALLOWED_NODES, str):
-            ALLOWED_NODES = ALLOWED_NODES.split(",")
+        allowed_nodes = ALLOWED_NODES
+        allowed_relationships = ALLOWED_RELATIONSHIPS
+        node_properties = NODE_PROPERTIES
+        relationship_properties = RELATIONSHIP_PROPERTIES
 
-        if ALLOWED_RELATIONSHIPS and isinstance(ALLOWED_RELATIONSHIPS, str):
-            ALLOWED_RELATIONSHIPS = ALLOWED_RELATIONSHIPS.split(",")
+        # Process string inputs if needed
+        if allowed_nodes and isinstance(allowed_nodes, str):
+            allowed_nodes = allowed_nodes.split(",")
 
-        if NODE_PROPERTIES and isinstance(NODE_PROPERTIES, str):
-            NODE_PROPERTIES = NODE_PROPERTIES.split(",")
+        if allowed_relationships and isinstance(allowed_relationships, str):
+            allowed_relationships = allowed_relationships.split(",")
 
-        if RELATIONSHIP_PROPERTIES and isinstance(RELATIONSHIP_PROPERTIES, str):
-            RELATIONSHIP_PROPERTIES = RELATIONSHIP_PROPERTIES.split(",")
+        if node_properties and isinstance(node_properties, str):
+            node_properties = node_properties.split(",")
+
+        if relationship_properties and isinstance(relationship_properties, str):
+            relationship_properties = relationship_properties.split(",")
         
         ##############################
         # Prompt Template (optional) #
         ##############################
         
-        PROMPT_TEMPLATE = None
+        prompt_template = None
         if SYSTEM_PROMPT_PATH is not None:
             try:
                 with open(SYSTEM_PROMPT_PATH, "r") as f:
-                    PROMPT_TEMPLATE = ChatPromptTemplate.from_messages(
-                        [
-                            (
-                                "system",
-                                f.read(),
-                            ),
-                            (
-                                "human",
-                                (
-                                    "Tip: Make sure to answer in the correct format and do "
-                                    "not include any explanations. "
-                                    "Use the given format to extract information from the "
-                                    "following input: {input}"
-                                ),
-                            ),
-                        ]
-                    )
+                    prompt_template = ChatPromptTemplate.from_messages([
+                        ("system", f.read()),
+                        ("human", (
+                            "Tip: Make sure to answer in the correct format and do "
+                            "not include any explanations. "
+                            "Use the given format to extract information from the "
+                            "following input: {input}"
+                        )),
+                    ])
             except Exception as e:
                 logger.error(f"Could not set custom Prompt: {e}")
 
@@ -165,11 +163,11 @@ class OpeaArangoDataprep(OpeaComponent):
         try:
             llm_transformer = LLMGraphTransformer(
                 llm=llm,
-                allowed_nodes=ALLOWED_NODES,
-                allowed_relationships=ALLOWED_RELATIONSHIPS,
-                prompt=PROMPT_TEMPLATE,
-                node_properties=NODE_PROPERTIES or False,
-                relationship_properties=RELATIONSHIP_PROPERTIES or False,
+                allowed_nodes=allowed_nodes,
+                allowed_relationships=allowed_relationships,
+                prompt=prompt_template,
+                node_properties=node_properties or False,
+                relationship_properties=relationship_properties or False,
                 ignore_tool_usage=ignore_tool_usage,
             )
         except (TypeError, ValueError) as e:
@@ -189,20 +187,19 @@ class OpeaArangoDataprep(OpeaComponent):
             
         if OPENAI_API_KEY and OPENAI_EMBED_ENABLED:
             # Use OpenAI embeddings
-            embeddings = OpenAIEmbeddings(
+            self.embeddings = OpenAIEmbeddings(
                 model=OPENAI_EMBED_MODEL,
                 dimensions=OPENAI_EMBED_DIMENSION,
             )
-
         elif TEI_EMBEDDING_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
             # Use TEI endpoint service
-            embeddings = HuggingFaceHubEmbeddings(
+            self.embeddings = HuggingFaceHubEmbeddings(
                 model=TEI_EMBEDDING_ENDPOINT,
                 huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN,
             )
         elif TEI_EMBED_MODEL:
             # Use local embedding model
-            embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
+            self.embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
         else:
             raise ValueError("No embeddings environment variables are set, cannot generate embeddings.")
 
@@ -222,11 +219,11 @@ class OpeaArangoDataprep(OpeaComponent):
 
         self.llm_transformer = LLMGraphTransformer(
             llm=llm,
-            allowed_nodes=ALLOWED_NODES,
-            allowed_relationships=ALLOWED_RELATIONSHIPS,
-            prompt=PROMPT_TEMPLATE,
-            node_properties=NODE_PROPERTIES or False,
-            relationship_properties=RELATIONSHIP_PROPERTIES or False,
+            allowed_nodes=allowed_nodes,
+            allowed_relationships=allowed_relationships,
+            prompt=prompt_template,
+            node_properties=node_properties or False,
+            relationship_properties=relationship_properties or False,
             ignore_tool_usage=ignore_tool_usage,
         )
         self.graph = ArangoGraph(db=db, include_examples=False, generate_schema_on_init=False)
@@ -248,7 +245,8 @@ class OpeaArangoDataprep(OpeaComponent):
         """Ingest document to ArangoDB."""
         path = doc_path.path
         if logflag:
-            logger.info(f"Parsing document {path}.")
+            logger.info(f"Parsing document {path}")
+        
         ############
         # Chunking #
         ############
@@ -283,7 +281,7 @@ class OpeaArangoDataprep(OpeaComponent):
                 chunks = chunks + table_chunks
 
         if logflag:
-            logger.info("Done preprocessing. Created ", len(chunks), " chunks of the original file.")
+            logger.info(f"Created {len(chunks)} chunks of the original file")
         
         ################################
         # Graph generation & insertion #
@@ -301,12 +299,12 @@ class OpeaArangoDataprep(OpeaComponent):
             document = Document(page_content=text)
 
             if logflag:
-                logger.info(f"Chunk {i}: extracting nodes & relationships.")
+                logger.info(f"Chunk {i}: extracting nodes & relationships")
 
             graph_doc = self.llm_transformer.process_response(document)
 
             if logflag:
-                logger.info(f"Chunk {i}: inserting into ArangoDB.")
+                logger.info(f"Chunk {i}: inserting into ArangoDB")
 
             self.graph.add_graph_documents(
                 graph_documents=[graph_doc],
@@ -324,10 +322,10 @@ class OpeaArangoDataprep(OpeaComponent):
             )
 
             if logflag:
-                logger.info(f"Chunk {i}: processed.")
+                logger.info(f"Chunk {i}: processed")
 
         if logflag:
-            logger.info("The graph is built.")
+            logger.info("The graph is built")
 
         return graph_name
 
