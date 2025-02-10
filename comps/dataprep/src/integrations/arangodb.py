@@ -78,12 +78,6 @@ ALLOWED_RELATIONSHIPS = os.getenv("ALLOWED_RELATIONSHIPS", []) # [("Person", "kn
 NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", ['description'])
 RELATIONSHIP_PROPERTIES = os.getenv("RELATIONSHIP_PROPERTIES", ['description'])
 
-# # Parsing configuration
-# PROCESS_TABLE = os.getenv("PROCESS_TABLE", "false").lower() == "true"
-# TABLE_STRATEGY = os.getenv("TABLE_STRATEGY", "fast")
-# CHUNK_SIZE = os.getenv("CHUNK_SIZE", 500)
-# CHUNK_OVERLAP = os.getenv("CHUNK_OVERLAP", 100)
-
 @OpeaComponentRegistry.register("OPEA_DATAPREP_ARANGODBgit ")
 class OpeaArangoDataprep(OpeaComponent):
     """Dataprep component for ArangoDB ingestion and search services."""
