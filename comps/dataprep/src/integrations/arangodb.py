@@ -78,13 +78,13 @@ ALLOWED_RELATIONSHIPS = os.getenv("ALLOWED_RELATIONSHIPS", []) # [("Person", "kn
 NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", ['description'])
 RELATIONSHIP_PROPERTIES = os.getenv("RELATIONSHIP_PROPERTIES", ['description'])
 
-# Parsing configuration
-PROCESS_TABLE = os.getenv("PROCESS_TABLE", "false").lower() == "true"
-TABLE_STRATEGY = os.getenv("TABLE_STRATEGY", "fast")
-CHUNK_SIZE = os.getenv("CHUNK_SIZE", 500)
-CHUNK_OVERLAP = os.getenv("CHUNK_OVERLAP", 100)
+# # Parsing configuration
+# PROCESS_TABLE = os.getenv("PROCESS_TABLE", "false").lower() == "true"
+# TABLE_STRATEGY = os.getenv("TABLE_STRATEGY", "fast")
+# CHUNK_SIZE = os.getenv("CHUNK_SIZE", 500)
+# CHUNK_OVERLAP = os.getenv("CHUNK_OVERLAP", 100)
 
-@OpeaComponentRegistry.register("OPEA_DATAPREP_ARANGODB")
+@OpeaComponentRegistry.register("OPEA_DATAPREP_ARANGODBgit ")
 class OpeaArangoDataprep(OpeaComponent):
     """Dataprep component for ArangoDB ingestion and search services."""
 
@@ -341,11 +341,11 @@ class OpeaArangoDataprep(OpeaComponent):
         self,
         files: Optional[Union[UploadFile, List[UploadFile]]] = File(None),
         link_list: Optional[str] = Form(None),
-        chunk_size: int = Form(CHUNK_SIZE),
-        chunk_overlap: int = Form(CHUNK_OVERLAP),
-        process_table: bool = Form(PROCESS_TABLE),
-        table_strategy: str = Form(TABLE_STRATEGY),
-    ):
+        chunk_size: int = Form(1500),
+        chunk_overlap: int = Form(100),
+        process_table: bool = Form(False),
+        table_strategy: str = Form("fast"),
+    ):  
         """Ingest files/links content into ArangoDB database.
 
         Save in the format of vector[768].
@@ -373,10 +373,10 @@ class OpeaArangoDataprep(OpeaComponent):
             uploaded_files = []
             for file in files:
                 encode_file = encode_filename(file.filename)
-                save_path = upload_folder + encode_file
+                save_path = self.upload_folder + encode_file
                 await save_content_to_local_disk(save_path, file)
                 try:
-                    graph_name = ingest_data_to_arango(
+                    graph_name = self.ingest_data_to_arango(
                         DocPath(
                             path=save_path,
                             chunk_size=chunk_size,
@@ -400,11 +400,11 @@ class OpeaArangoDataprep(OpeaComponent):
                 raise HTTPException(status_code=400, detail="link_list should be a list.")
             for link in link_list:
                 encoded_link = encode_filename(link)
-                save_path = upload_folder + encoded_link + ".txt"
+                save_path = self.upload_folder + encoded_link + ".txt"
                 content = parse_html([link])[0][0]
                 await save_content_to_local_disk(save_path, content)
                 try:
-                    graph_name = ingest_data_to_arango(
+                    graph_name = self.ingest_data_to_arango(
                         DocPath(
                             path=save_path,
                             chunk_size=chunk_size,
