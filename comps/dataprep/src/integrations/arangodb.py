@@ -54,7 +54,7 @@ VLLM_TOP_P = os.getenv("VLLM_TOP_P", 0.9)
 VLLM_TEMPERATURE = os.getenv("VLLM_TEMPERATURE", 0.8)
 VLLM_TIMEOUT = os.getenv("VLLM_TIMEOUT", 600)
 
-#TGI/TEI configuration
+# TGI/TEI configuration
 TEI_EMBEDDING_ENDPOINT = os.getenv("TEI_ENDPOINT")
 TEI_EMBED_MODEL = os.getenv("TEI_EMBED_MODEL", "BAAI/bge-base-en-v1.5")
 HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
@@ -73,10 +73,13 @@ OPENAI_EMBED_ENABLED = os.getenv("OPENAI_EMBED_ENABLED", "true").lower() == "tru
 
 # LLM/Graph Transformer configuration
 SYSTEM_PROMPT_PATH = os.getenv("SYSTEM_PROMPT_PATH")
-ALLOWED_NODES = os.getenv("ALLOWED_NODES", []) # ["Person", "Organization"]
-ALLOWED_RELATIONSHIPS = os.getenv("ALLOWED_RELATIONSHIPS", []) # [("Person", "knows", "Person"), ("Person", "works_at", "Organization")]
-NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", ['description'])
-RELATIONSHIP_PROPERTIES = os.getenv("RELATIONSHIP_PROPERTIES", ['description'])
+ALLOWED_NODES = os.getenv("ALLOWED_NODES", [])  # ["Person", "Organization"]
+ALLOWED_RELATIONSHIPS = os.getenv(
+    "ALLOWED_RELATIONSHIPS", []
+)  # [("Person", "knows", "Person"), ("Person", "works_at", "Organization")]
+NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", ["description"])
+RELATIONSHIP_PROPERTIES = os.getenv("RELATIONSHIP_PROPERTIES", ["description"])
+
 
 @OpeaComponentRegistry.register("OPEA_DATAPREP_ARANGODB")
 class OpeaArangoDataprep(OpeaComponent):
@@ -103,24 +106,29 @@ class OpeaArangoDataprep(OpeaComponent):
 
         if relationship_properties and isinstance(relationship_properties, str):
             relationship_properties = relationship_properties.split(",")
-        
+
         ##############################
         # Prompt Template (optional) #
         ##############################
-        
+
         prompt_template = None
         if SYSTEM_PROMPT_PATH is not None:
             try:
                 with open(SYSTEM_PROMPT_PATH, "r") as f:
-                    prompt_template = ChatPromptTemplate.from_messages([
-                        ("system", f.read()),
-                        ("human", (
-                            "Tip: Make sure to answer in the correct format and do "
-                            "not include any explanations. "
-                            "Use the given format to extract information from the "
-                            "following input: {input}"
-                        )),
-                    ])
+                    prompt_template = ChatPromptTemplate.from_messages(
+                        [
+                            ("system", f.read()),
+                            (
+                                "human",
+                                (
+                                    "Tip: Make sure to answer in the correct format and do "
+                                    "not include any explanations. "
+                                    "Use the given format to extract information from the "
+                                    "following input: {input}"
+                                ),
+                            ),
+                        ]
+                    )
             except Exception as e:
                 logger.error(f"Could not set custom Prompt: {e}")
 
@@ -155,11 +163,11 @@ class OpeaArangoDataprep(OpeaComponent):
                 max_tokens=VLLM_MAX_NEW_TOKENS,
                 top_p=VLLM_TOP_P,
                 timeout=VLLM_TIMEOUT,
-            )            
+            )
             ignore_tool_usage = True
         else:
             raise ValueError("No text generation environment variables are set, cannot generate graphs.")
-        
+
         try:
             llm_transformer = LLMGraphTransformer(
                 llm=llm,
@@ -180,11 +188,11 @@ class OpeaArangoDataprep(OpeaComponent):
                 if logflag:
                     logger.error(f"Failed to initialize LLMGraphTransformer: {e}")
                 raise e
-            
+
         ########################################
         # Text Embeddings Inference (optional) #
         ########################################
-            
+
         if OPENAI_API_KEY and OPENAI_EMBED_ENABLED:
             # Use OpenAI embeddings
             self.embeddings = OpenAIEmbeddings(
@@ -246,7 +254,7 @@ class OpeaArangoDataprep(OpeaComponent):
         path = doc_path.path
         if logflag:
             logger.info(f"Parsing document {path}")
-        
+
         ############
         # Chunking #
         ############
@@ -282,7 +290,7 @@ class OpeaArangoDataprep(OpeaComponent):
 
         if logflag:
             logger.info(f"Created {len(chunks)} chunks of the original file")
-        
+
         ################################
         # Graph generation & insertion #
         ################################
@@ -337,7 +345,7 @@ class OpeaArangoDataprep(OpeaComponent):
         chunk_overlap: int = Form(100),
         process_table: bool = Form(False),
         table_strategy: str = Form("fast"),
-    ):  
+    ):
         """Ingest files/links content into ArangoDB database.
 
         Save in the format of vector[768].
@@ -424,7 +432,7 @@ class OpeaArangoDataprep(OpeaComponent):
             logger.info(result)
 
         return result
-    
+
     def invoke(self, *args, **kwargs):
         pass
 
