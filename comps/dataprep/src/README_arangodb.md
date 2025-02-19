@@ -15,7 +15,7 @@ apt-get install poppler-utils -y
 To launch ArangoDB locally, first ensure you have docker installed. Then, you can launch the database with the following docker command.
 
 ```bash
-docker run -d --name arangodb -p 8529:8529 -e ARANGO_ROOT_PASSWORD=password arangodb/arangodb:latest
+docker run -d   --name arango-vector-db  -p 8529:8529   -e ARANGO_ROOT_PASSWORD=password   arangodb/arangodb:3.12.4   --experimental-vector-index=true
 ```
 
 ### Setup Environment Variables
@@ -51,7 +51,7 @@ docker build -t opea/dataprep-arango:latest --build-arg https_proxy=$https_proxy
 ### Run Docker with CLI
 
 ```bash
-docker run -d --name="dataprep-arango-server" -p 6007:6007 --ipc=host -e http_proxy=$http_proxy -e https_proxy=$https_proxy -e ... opea/dataprep-arango:latest
+docker run -d --name="dataprep-arango-server" -p 6007:5000 --ipc=host -e http_proxy=$http_proxy -e https_proxy=$https_proxy -e ... opea/dataprep-arango:latest
 ```
 
 ### Run Docker with Docker Compose
@@ -69,11 +69,10 @@ An ArangoDB Graph is created from the documents provided to the microservice. Th
 curl -X POST \
     -H "Content-Type: multipart/form-data" \
     -F "files=@./file1.txt" \
-    -F "graph_name=${your_graph_name}" \
     http://localhost:6007/v1/dataprep
 ```
 
-You can specify the graph name with `-F "graph_name=${your_graph_name}"` in the curl command.
+You can specify the graph name through the `graph_name` variables in arangodb.py.
 
 By default, the microservice will create embeddings for the documents if embedding environment variables are specified. You can specify `-F "create_embeddings=false"` to skip document embedding creation.
 
@@ -85,7 +84,6 @@ curl -X POST \
     -F "files=@./file1.txt" \
     -F "chunk_size=1500" \
     -F "chunk_overlap=100" \
-    -F "graph_name=${your_graph_name}" \
     http://localhost:6007/v1/dataprep
 ```
 
@@ -101,7 +99,6 @@ curl -X POST \
     -F "files=@./your_file.pdf" \
     -F "process_table=true" \
     -F "table_strategy=hq" \
-    -F "graph_name=${your_graph_name}" \
     http://localhost:6007/v1/dataprep
 ```
 
@@ -158,5 +155,5 @@ OpenAI Configuration:
 Parsing Configuration:
 - `PROCESS_TABLE`: If set to True, the microservice will process tables in the document. Defaults to `False`.
 - `TABLE_STRATEGY`: The strategy to understand tables for table retrieval. Defaults to `fast`.
-- `CHUNK_SIZE`: The size of the chunks to process. Defaults to `500`.
-- `CHUNK_OVERLAP`: The overlap between chunks. Defaults to `50`.
+- `CHUNK_SIZE`: The size of the chunks to process. Defaults to `1500`.
+- `CHUNK_OVERLAP`: The overlap between chunks. Defaults to `100`.
