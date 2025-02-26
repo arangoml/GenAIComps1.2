@@ -39,15 +39,11 @@ see below for additional environment variables that can be set.
 
 ## 🚀3. Consume Dataprep Service
 
-### 3.1 Check Service Status
-
 ```bash
 curl http://${your_ip}:6007/v1/health_check \
   -X GET \
   -H 'Content-Type: application/json'
 ```
-
-## 🚀 3. Consume Dataprep Service
 
 An ArangoDB Graph is created from the documents provided to the microservice. The microservice will extract entities from the documents and create nodes and relationships in the graph based on the entities extracted. The microservice will also create embeddings for the documents if embedding environment variables are specified.
 
