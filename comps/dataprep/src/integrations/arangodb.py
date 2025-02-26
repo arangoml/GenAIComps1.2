@@ -224,7 +224,7 @@ class OpeaArangoDataprep(OpeaComponent):
             logger.info(f"Connected to ArangoDB {db.version()}.")
 
         
-        self.graph = ArangoGraph(db=db, include_examples=False, generate_schema_on_init=False)
+        self.graph = ArangoGraph(db=db, generate_schema_on_init=False, schema_include_examples=False)
 
         # Perform health check
         health_status = self.check_health()
