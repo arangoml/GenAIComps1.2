@@ -15,7 +15,7 @@ huggingface_hub
 ipython
 langchain
 #langchain-community
-git+https://github.com/arangoml/langchain.git@arangodb#subdirectory=libs/community
+git+https://github.com/arangoml/langchain.git@master#subdirectory=libs/community
 langchain-elasticsearch
 langchain-experimental
 langchain-openai
