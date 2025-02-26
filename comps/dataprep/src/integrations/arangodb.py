@@ -47,14 +47,14 @@ ARANGO_USE_GRAPH_NAME = os.getenv("ARANGO_USE_GRAPH_NAME", True)
 ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 
 # VLLM configuration
-VLLM_ENDPOINT = os.getenv("VLLM_ENDPOINT")
+VLLM_ENDPOINT = os.getenv("VLLM_ENDPOINT", "http://localhost:80")
 VLLM_MODEL_ID = os.getenv("VLLM_MODEL_ID", "Intel/neural-chat-7b-v3-3")
 VLLM_MAX_NEW_TOKENS = os.getenv("VLLM_MAX_NEW_TOKENS", 512)
 VLLM_TOP_P = os.getenv("VLLM_TOP_P", 0.9)
 VLLM_TEMPERATURE = os.getenv("VLLM_TEMPERATURE", 0.8)
 VLLM_TIMEOUT = os.getenv("VLLM_TIMEOUT", 600)
 
-# TGI/TEI configuration
+# TEI configuration
 TEI_EMBEDDING_ENDPOINT = os.getenv("TEI_ENDPOINT")
 TEI_EMBED_MODEL = os.getenv("TEI_EMBED_MODEL", "BAAI/bge-base-en-v1.5")
 HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
@@ -62,7 +62,7 @@ EMBED_SOURCE_DOCUMENTS = os.getenv("EMBED_SOURCE_DOCUMENTS", "true").lower() == 
 EMBED_NODES = os.getenv("EMBED_NODES", "false").lower() == "true"
 EMBED_RELATIONSHIPS = os.getenv("EMBED_RELATIONSHIPS", "false").lower() == "true"
 
-# OpenAI configuration (alternative to TGI & TEI)
+# OpenAI configuration (alternative to TEI/VLLM)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
 OPENAI_EMBED_DIMENSION = os.getenv("OPENAI_EMBED_DIMENSION", 512)
@@ -169,7 +169,7 @@ class OpeaArangoDataprep(OpeaComponent):
             raise ValueError("No text generation environment variables are set, cannot generate graphs.")
 
         try:
-            llm_transformer = LLMGraphTransformer(
+            self.llm_transformer = LLMGraphTransformer(
                 llm=llm,
                 allowed_nodes=allowed_nodes,
                 allowed_relationships=allowed_relationships,
@@ -183,7 +183,7 @@ class OpeaArangoDataprep(OpeaComponent):
                 logger.warning(f"Advanced LLMGraphTransformer failed: {e}")
             # Fall back to basic config
             try:
-                llm_transformer = LLMGraphTransformer(llm=llm, ignore_tool_usage=ignore_tool_usage)
+                self.llm_transformer = LLMGraphTransformer(llm=llm, ignore_tool_usage=ignore_tool_usage)
             except (TypeError, ValueError) as e:
                 if logflag:
                     logger.error(f"Failed to initialize LLMGraphTransformer: {e}")
@@ -225,15 +225,7 @@ class OpeaArangoDataprep(OpeaComponent):
         if logflag:
             logger.info(f"Connected to ArangoDB {db.version()}.")
 
-        self.llm_transformer = LLMGraphTransformer(
-            llm=llm,
-            allowed_nodes=allowed_nodes,
-            allowed_relationships=allowed_relationships,
-            prompt=prompt_template,
-            node_properties=node_properties or False,
-            relationship_properties=relationship_properties or False,
-            ignore_tool_usage=ignore_tool_usage,
-        )
+        
         self.graph = ArangoGraph(db=db, include_examples=False, generate_schema_on_init=False)
 
         # Perform health check
