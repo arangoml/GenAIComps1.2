@@ -74,9 +74,7 @@ OPENAI_EMBED_ENABLED = os.getenv("OPENAI_EMBED_ENABLED", "true").lower() == "tru
 # LLM/Graph Transformer configuration
 SYSTEM_PROMPT_PATH = os.getenv("SYSTEM_PROMPT_PATH")
 ALLOWED_NODES = os.getenv("ALLOWED_NODES", [])
-ALLOWED_RELATIONSHIPS = os.getenv(
-    "ALLOWED_RELATIONSHIPS", []
-)  # [("Person", "knows", "Person"), ("Person", "works_at", "Organization")]
+ALLOWED_RELATIONSHIPS = os.getenv("ALLOWED_RELATIONSHIPS", [])
 NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", ["description"])
 RELATIONSHIP_PROPERTIES = os.getenv("RELATIONSHIP_PROPERTIES", ["description"])
 
