@@ -280,9 +280,7 @@ class ServiceOrchestrator(DAG):
                     # response.elapsed = time until first headers received
                     buffered_chunk_str = ""
                     is_first = True
-
                     for chunk in self.wrap_iterable(response.iter_content(chunk_size=None)):
-
                         if chunk:
                             if downstream:
                                 chunk = chunk.decode("utf-8")

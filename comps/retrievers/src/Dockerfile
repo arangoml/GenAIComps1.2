@@ -32,6 +32,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools && \
 ENV PYTHONPATH=$PYTHONPATH:/home/user
 
 USER user
+ENV NLTK_DATA=/home/user/nltk_data
 
 WORKDIR /home/user/comps/retrievers/src
 
