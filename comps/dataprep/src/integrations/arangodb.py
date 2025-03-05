@@ -223,7 +223,6 @@ class OpeaArangoDataprep(OpeaComponent):
         if logflag:
             logger.info(f"Connected to ArangoDB {db.version()}.")
 
-        
         self.graph = ArangoGraph(db=db, generate_schema_on_init=False, schema_include_examples=False)
 
         # Perform health check
@@ -294,7 +293,7 @@ class OpeaArangoDataprep(OpeaComponent):
             logger.info(f"Creating graph {graph_name}.")
 
         for i, text in enumerate(chunks):
-            document = Document(page_content=text)
+            document = Document(page_content=text, metadata={"file_name": path, "chunk_index": i})
 
             if logflag:
                 logger.info(f"Chunk {i}: extracting nodes & relationships")
@@ -428,7 +427,7 @@ class OpeaArangoDataprep(OpeaComponent):
         pass
 
     async def get_files(self):
-        """Get file structure from pipecone database in the format of
+        """Get file structure from ArangoDB in the format of
         {
             "name": "File Name",
             "id": "File Name",
