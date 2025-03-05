@@ -63,3 +63,5 @@ unstructured[all-docs]
 uvicorn
 vdms
 webvtt-py
+json-repair
+
