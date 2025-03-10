@@ -28,6 +28,7 @@ from comps.dataprep.src.utils import (
     get_tables_result,
     parse_html,
     save_content_to_local_disk,
+    format_file_list,
 )
 
 logger = CustomLogger("OPEA_DATAPREP_ARANGODB")
@@ -432,7 +433,6 @@ class OpeaArangoDataprep(OpeaComponent):
             "name": "File Name",
             "id": "File Name", 
             "type": "File",
-            "index": 0,
             "parent": "",
         }"""
         try:
@@ -441,26 +441,25 @@ class OpeaArangoDataprep(OpeaComponent):
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to connect to ArangoDB: {e}")
 
-        files = []
+        files = list()
         for graph in db.graphs():
             source_collection = f"{graph['name']}_SOURCE"
 
             query = f"""
                 FOR chunk IN {source_collection}
-                    RETURN {{id: chunk._key, file: chunk.file_name, type: chunk.type, index: chunk.chunk_index}}
+                RETURN {{file_name: chunk.file_name}}
             """
 
             cursor = db.aql.execute(query)
             for doc in cursor:
-                files.append({
-                    "name": doc["file"],
-                    "id": doc["id"],
-                    "type": doc["type"],
-                    "index": doc["index"],
-                    "parent": "",
-                })
+                files.append(doc["file_name"])
 
-        return files
+        file_list = format_file_list(list(set(files)))
+
+        if logflag:
+            logger.info(f"[ arango get ] final file list: {file_list}")
+
+        return file_list
 
     async def delete_files(self, file_path: str = Body(..., embed=True)):
         """Delete file according to `file_path`.
