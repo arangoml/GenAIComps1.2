@@ -214,22 +214,29 @@ class OpeaArangoDataprep(OpeaComponent):
         # ArangoDB #
         ############
 
-        client = ArangoClient(hosts=ARANGO_URL)
-        sys_db = client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
-
-        if not sys_db.has_database(ARANGO_DB_NAME):
-            sys_db.create_database(ARANGO_DB_NAME)
-
-        db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
-        if logflag:
-            logger.info(f"Connected to ArangoDB {db.version()}.")
-
-        self.graph = ArangoGraph(db=db, generate_schema_on_init=False, schema_include_examples=False)
+        # Initialize ArangoDB
+        self.initialize_arangodb()
 
         # Perform health check
         health_status = self.check_health()
         if not health_status:
             logger.error("OpeaArangoDataprep health check failed.")
+    
+    
+
+    def initialize_arangodb(self):
+        """Initialize the ArangoDB connection."""
+        self.client = ArangoClient(hosts=ARANGO_URL)
+        sys_db = self.client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+
+        if not sys_db.has_database(ARANGO_DB_NAME):
+            sys_db.create_database(ARANGO_DB_NAME)
+
+        self.db = self.client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+        if logflag:
+            logger.info(f"Connected to ArangoDB {self.db.version()}.")
+
+        self.graph = ArangoGraph(db=self.db, generate_schema_on_init=False, schema_include_examples=False)
 
     def check_health(self) -> bool:
         """Checks the health of the ArangoDB service."""
@@ -436,8 +443,8 @@ class OpeaArangoDataprep(OpeaComponent):
             "parent": "",
         }"""
         try:
-            client = ArangoClient(hosts=ARANGO_URL)
-            db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+            self.initialize_arangodb()
+            db = self.db
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to connect to ArangoDB: {e}")
 
@@ -469,8 +476,8 @@ class OpeaArangoDataprep(OpeaComponent):
             - "all": delete all files uploaded
         """
         try:
-            client = ArangoClient(hosts=ARANGO_URL)
-            db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+            self.initialize_arangodb()
+            db = self.db
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to connect to ArangoDB: {e}")
 
