@@ -430,11 +430,37 @@ class OpeaArangoDataprep(OpeaComponent):
         """Get file structure from ArangoDB in the format of
         {
             "name": "File Name",
-            "id": "File Name",
+            "id": "File Name", 
             "type": "File",
+            "index": 0,
             "parent": "",
         }"""
-        pass
+        try:
+            client = ArangoClient(hosts=ARANGO_URL)
+            db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to connect to ArangoDB: {e}")
+
+        files = []
+        for graph in db.graphs():
+            source_collection = f"{graph['name']}_SOURCE"
+
+            query = f"""
+                FOR chunk IN {source_collection}
+                    RETURN {{id: chunk._key, file: chunk.file_name, type: chunk.type, index: chunk.chunk_index}}
+            """
+
+            cursor = db.aql.execute(query)
+            for doc in cursor:
+                files.append({
+                    "name": doc["file"],
+                    "id": doc["id"],
+                    "type": doc["type"],
+                    "index": doc["index"],
+                    "parent": "",
+                })
+
+        return files
 
     async def delete_files(self, file_path: str = Body(..., embed=True)):
         """Delete file according to `file_path`.
@@ -443,4 +469,29 @@ class OpeaArangoDataprep(OpeaComponent):
             - specific file path (e.g. /path/to/file.txt)
             - "all": delete all files uploaded
         """
-        pass
+        try:
+            client = ArangoClient(hosts=ARANGO_URL)
+            db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to connect to ArangoDB: {e}")
+
+        if file_path == "all":
+            for graph in db.graphs():
+                db.delete_graph(
+                    graph["name"],
+                    drop_collections=True
+                )
+        else:
+            if ARANGO_USE_GRAPH_NAME:
+                db.delete_graph(
+                    ARANGO_GRAPH_NAME,
+                    drop_collections=True
+                )
+            else:
+                file_name = os.path.basename(file_path).split(".")[0]
+                graph_name = "".join(c for c in file_name if c.isalnum() or c in "_-:.@()+,=;$!*'%")
+
+                db.delete_graph(
+                    graph_name,
+                    drop_collections=True
+                )
