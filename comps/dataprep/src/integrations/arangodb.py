@@ -14,21 +14,21 @@ from langchain_community.graphs.arangodb_graph import ArangoGraph
 from langchain_community.llms import HuggingFaceEndpoint
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from langchain_core.prompts import BasePromptTemplate, ChatPromptTemplate
 from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import HTMLHeaderTextSplitter
-from langchain_core.prompts import ChatPromptTemplate, BasePromptTemplate
-
 
 from comps import CustomLogger, DocPath, OpeaComponent, OpeaComponentRegistry, ServiceType
 from comps.dataprep.src.utils import (
+    decode_filename,
     document_loader,
     encode_filename,
+    format_file_list,
     get_separators,
     get_tables_result,
     parse_html,
     save_content_to_local_disk,
-    format_file_list,
 )
 
 logger = CustomLogger("OPEA_DATAPREP_ARANGODB")
@@ -221,8 +221,6 @@ class OpeaArangoDataprep(OpeaComponent):
         health_status = self.check_health()
         if not health_status:
             logger.error("OpeaArangoDataprep health check failed.")
-    
-    
 
     def initialize_arangodb(self):
         """Initialize the ArangoDB connection."""
@@ -235,7 +233,6 @@ class OpeaArangoDataprep(OpeaComponent):
         self.db = self.client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
         if logflag:
             logger.info(f"Connected to ArangoDB {self.db.version()}.")
-
 
     def check_health(self) -> bool:
         """Checks the health of the retriever service."""
@@ -444,30 +441,40 @@ class OpeaArangoDataprep(OpeaComponent):
         """Get file structure from ArangoDB in the format of
         {
             "name": "File Name",
-            "id": "File Name", 
+            "id": "File Name",
+            "graph": "Graph Name",
             "type": "File",
             "parent": "",
         }"""
 
-        files = list()
+        res_list = []
+
         for graph in self.db.graphs():
             source_collection = f"{graph['name']}_SOURCE"
 
             query = f"""
-                FOR chunk IN {source_collection}
-                RETURN {{file_name: chunk.file_name}}
+                FOR chunk IN @@source_collection
+                    COLLECT file_name = chunk.file_name
+                    RETURN file_name
             """
 
-            cursor = self.db.aql.execute(query)
-            for doc in cursor:
-                files.append(doc["file_name"])
+            cursor = self.db.aql.execute(query, bind_vars={"@source_collection": source_collection})
 
-        file_list = format_file_list(list(set(files)))
+            for file_name in cursor:
+                res_list.append(
+                    {
+                        "name": decode_filename(file_name),
+                        "id": decode_filename(file_name),
+                        "graph": graph["name"],
+                        "type": "File",
+                        "parent": "",
+                    }
+                )
 
         if logflag:
-            logger.info(f"[ arango get ] final file list: {file_list}")
+            logger.info(f"[ arango get ] number of files: {len(res_list)}")
 
-        return file_list
+        return res_list
 
     async def delete_files(self, file_path: str = Body(..., embed=True)):
         """Delete file according to `file_path`.
@@ -479,21 +486,12 @@ class OpeaArangoDataprep(OpeaComponent):
 
         if file_path == "all":
             for graph in self.db.graphs():
-                self.db.delete_graph(
-                    graph["name"],
-                    drop_collections=True
-                )
+                self.db.delete_graph(graph["name"], drop_collections=True)
         else:
             if ARANGO_USE_GRAPH_NAME:
-                self.db.delete_graph(
-                    ARANGO_GRAPH_NAME,
-                    drop_collections=True
-                )
+                self.db.delete_graph(ARANGO_GRAPH_NAME, drop_collections=True)
             else:
                 file_name = os.path.basename(file_path).split(".")[0]
                 graph_name = "".join(c for c in file_name if c.isalnum() or c in "_-:.@()+,=;$!*'%")
 
-                self.db.delete_graph(
-                    graph_name,
-                    drop_collections=True
-                )
+                self.db.delete_graph(graph_name, drop_collections=True)
