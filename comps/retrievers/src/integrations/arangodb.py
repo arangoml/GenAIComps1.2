@@ -182,13 +182,13 @@ class OpeaArangoRetriever(OpeaComponent):
             I've performed vector similarity on the following
             query to retrieve most relevant documents: '{query}' 
 
-            Each retrieved Document may have a 'RELATED CHUNKS' section.
+            Each retrieved Document may have a 'RELATED INFORMATION' section.
 
             Please consider summarizing the Document below using the query as the foundation to summarize the text.
 
             The Document: {text}
 
-            Provide a summary to include all content relevant to the query, using the RELATED CHUNKS section (if provided) as needed.
+            Provide a summary to include all content relevant to the query, using the RELATED INFORMATION section (if provided) as needed.
 
             Your summary:
         """
@@ -353,7 +353,7 @@ class OpeaArangoRetriever(OpeaComponent):
             for r in search_res:
                 neighborhood = neighborhoods.get(r.id)
                 if neighborhood:
-                    r.page_content += "\n------\nRELATED CHUNKS:\n------\n"
+                    r.page_content += "\n------\nRELATED INFORMATION:\n------\n"
                     r.page_content += str(neighborhood)
 
             if logflag:
