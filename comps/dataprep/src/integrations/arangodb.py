@@ -236,15 +236,19 @@ class OpeaArangoDataprep(OpeaComponent):
         if logflag:
             logger.info(f"Connected to ArangoDB {self.db.version()}.")
 
-        self.graph = ArangoGraph(db=self.db, generate_schema_on_init=False, schema_include_examples=False)
 
     def check_health(self) -> bool:
-        """Checks the health of the ArangoDB service."""
-        if self.graph is None:
-            logger.error("ArangoDB graph is not initialized.")
+        """Checks the health of the retriever service."""
+        if logflag:
+            logger.info("[ check health ] start to check health of ArangoDB")
+        try:
+            version = self.db.version()
+            if logflag:
+                logger.info(f"[ check health ] Successfully connected to ArangoDB {version}!")
+            return True
+        except Exception as e:
+            logger.info(f"[ check health ] Failed to connect to ArangoDB: {e}")
             return False
-
-        return True
 
     def ingest_data_to_arango(self, doc_path: DocPath):
         """Ingest document to ArangoDB."""
@@ -299,6 +303,8 @@ class OpeaArangoDataprep(OpeaComponent):
 
         if logflag:
             logger.info(f"Creating graph {graph_name}.")
+
+        self.graph = ArangoGraph(db=self.db, generate_schema_on_init=False, schema_include_examples=False)
 
         for i, text in enumerate(chunks):
             document = Document(page_content=text, metadata={"file_name": path, "chunk_index": i})
@@ -442,14 +448,9 @@ class OpeaArangoDataprep(OpeaComponent):
             "type": "File",
             "parent": "",
         }"""
-        try:
-            self.initialize_arangodb()
-            db = self.db
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to connect to ArangoDB: {e}")
 
         files = list()
-        for graph in db.graphs():
+        for graph in self.db.graphs():
             source_collection = f"{graph['name']}_SOURCE"
 
             query = f"""
@@ -457,7 +458,7 @@ class OpeaArangoDataprep(OpeaComponent):
                 RETURN {{file_name: chunk.file_name}}
             """
 
-            cursor = db.aql.execute(query)
+            cursor = self.db.aql.execute(query)
             for doc in cursor:
                 files.append(doc["file_name"])
 
@@ -475,21 +476,16 @@ class OpeaArangoDataprep(OpeaComponent):
             - specific file path (e.g. /path/to/file.txt)
             - "all": delete all files uploaded
         """
-        try:
-            self.initialize_arangodb()
-            db = self.db
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to connect to ArangoDB: {e}")
 
         if file_path == "all":
-            for graph in db.graphs():
-                db.delete_graph(
+            for graph in self.db.graphs():
+                self.db.delete_graph(
                     graph["name"],
                     drop_collections=True
                 )
         else:
             if ARANGO_USE_GRAPH_NAME:
-                db.delete_graph(
+                self.db.delete_graph(
                     ARANGO_GRAPH_NAME,
                     drop_collections=True
                 )
@@ -497,7 +493,7 @@ class OpeaArangoDataprep(OpeaComponent):
                 file_name = os.path.basename(file_path).split(".")[0]
                 graph_name = "".join(c for c in file_name if c.isalnum() or c in "_-:.@()+,=;$!*'%")
 
-                db.delete_graph(
+                self.db.delete_graph(
                     graph_name,
                     drop_collections=True
                 )
