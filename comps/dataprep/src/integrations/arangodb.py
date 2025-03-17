@@ -14,16 +14,17 @@ from langchain_community.graphs.arangodb_graph import ArangoGraph
 from langchain_community.llms import HuggingFaceEndpoint
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from langchain_core.prompts import BasePromptTemplate, ChatPromptTemplate
 from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import HTMLHeaderTextSplitter
-from langchain_core.prompts import ChatPromptTemplate, BasePromptTemplate
-
 
 from comps import CustomLogger, DocPath, OpeaComponent, OpeaComponentRegistry, ServiceType
 from comps.dataprep.src.utils import (
+    decode_filename,
     document_loader,
     encode_filename,
+    format_file_list,
     get_separators,
     get_tables_result,
     parse_html,
@@ -213,30 +214,38 @@ class OpeaArangoDataprep(OpeaComponent):
         # ArangoDB #
         ############
 
-        client = ArangoClient(hosts=ARANGO_URL)
-        sys_db = client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
-
-        if not sys_db.has_database(ARANGO_DB_NAME):
-            sys_db.create_database(ARANGO_DB_NAME)
-
-        db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
-        if logflag:
-            logger.info(f"Connected to ArangoDB {db.version()}.")
-
-        self.graph = ArangoGraph(db=db, generate_schema_on_init=False, schema_include_examples=False)
+        # Initialize ArangoDB
+        self.initialize_arangodb()
 
         # Perform health check
         health_status = self.check_health()
         if not health_status:
             logger.error("OpeaArangoDataprep health check failed.")
 
-    def check_health(self) -> bool:
-        """Checks the health of the ArangoDB service."""
-        if self.graph is None:
-            logger.error("ArangoDB graph is not initialized.")
-            return False
+    def initialize_arangodb(self):
+        """Initialize the ArangoDB connection."""
+        self.client = ArangoClient(hosts=ARANGO_URL)
+        sys_db = self.client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
 
-        return True
+        if not sys_db.has_database(ARANGO_DB_NAME):
+            sys_db.create_database(ARANGO_DB_NAME)
+
+        self.db = self.client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+        if logflag:
+            logger.info(f"Connected to ArangoDB {self.db.version()}.")
+
+    def check_health(self) -> bool:
+        """Checks the health of the retriever service."""
+        if logflag:
+            logger.info("[ check health ] start to check health of ArangoDB")
+        try:
+            version = self.db.version()
+            if logflag:
+                logger.info(f"[ check health ] Successfully connected to ArangoDB {version}!")
+            return True
+        except Exception as e:
+            logger.info(f"[ check health ] Failed to connect to ArangoDB: {e}")
+            return False
 
     def ingest_data_to_arango(self, doc_path: DocPath):
         """Ingest document to ArangoDB."""
@@ -291,6 +300,8 @@ class OpeaArangoDataprep(OpeaComponent):
 
         if logflag:
             logger.info(f"Creating graph {graph_name}.")
+
+        self.graph = ArangoGraph(db=self.db, generate_schema_on_init=False, schema_include_examples=False)
 
         for i, text in enumerate(chunks):
             document = Document(page_content=text, metadata={"file_name": path, "chunk_index": i})
@@ -431,10 +442,39 @@ class OpeaArangoDataprep(OpeaComponent):
         {
             "name": "File Name",
             "id": "File Name",
+            "graph": "Graph Name",
             "type": "File",
             "parent": "",
         }"""
-        pass
+
+        res_list = []
+
+        for graph in self.db.graphs():
+            source_collection = f"{graph['name']}_SOURCE"
+
+            query = f"""
+                FOR chunk IN @@source_collection
+                    COLLECT file_name = chunk.file_name
+                    RETURN file_name
+            """
+
+            cursor = self.db.aql.execute(query, bind_vars={"@source_collection": source_collection})
+
+            for file_name in cursor:
+                res_list.append(
+                    {
+                        "name": decode_filename(file_name),
+                        "id": decode_filename(file_name),
+                        "graph": graph["name"],
+                        "type": "File",
+                        "parent": "",
+                    }
+                )
+
+        if logflag:
+            logger.info(f"[ arango get ] number of files: {len(res_list)}")
+
+        return res_list
 
     async def delete_files(self, file_path: str = Body(..., embed=True)):
         """Delete file according to `file_path`.
@@ -443,4 +483,15 @@ class OpeaArangoDataprep(OpeaComponent):
             - specific file path (e.g. /path/to/file.txt)
             - "all": delete all files uploaded
         """
-        pass
+
+        if file_path == "all":
+            for graph in self.db.graphs():
+                self.db.delete_graph(graph["name"], drop_collections=True)
+        else:
+            if ARANGO_USE_GRAPH_NAME:
+                self.db.delete_graph(ARANGO_GRAPH_NAME, drop_collections=True)
+            else:
+                file_name = os.path.basename(file_path).split(".")[0]
+                graph_name = "".join(c for c in file_name if c.isalnum() or c in "_-:.@()+,=;$!*'%")
+
+                self.db.delete_graph(graph_name, drop_collections=True)
