@@ -35,6 +35,7 @@ from .config import (
     SUMMARIZER_ENABLED,
     TEI_EMBED_MODEL,
     TEI_EMBEDDING_ENDPOINT,
+    VLLM_API_KEY,
     VLLM_ENDPOINT,
     VLLM_MAX_NEW_TOKENS,
     VLLM_MODEL_ID,
@@ -85,7 +86,7 @@ class OpeaArangoRetriever(OpeaComponent):
 
         elif VLLM_ENDPOINT:
             self.llm = ChatOpenAI(
-                openai_api_key="EMPTY",
+                openai_api_key=VLLM_API_KEY,
                 openai_api_base=f"{VLLM_ENDPOINT}/v1",
                 model=VLLM_MODEL_ID,
                 temperature=VLLM_TEMPERATURE,
