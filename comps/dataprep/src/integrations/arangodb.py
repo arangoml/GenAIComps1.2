@@ -48,6 +48,7 @@ ARANGO_USE_GRAPH_NAME = os.getenv("ARANGO_USE_GRAPH_NAME", True)
 ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 
 # VLLM configuration
+VLLM_API_KEY = os.getenv("VLLM_API_KEY", "EMPTY")
 VLLM_ENDPOINT = os.getenv("VLLM_ENDPOINT", "http://localhost:80")
 VLLM_MODEL_ID = os.getenv("VLLM_MODEL_ID", "Intel/neural-chat-7b-v3-3")
 VLLM_MAX_NEW_TOKENS = os.getenv("VLLM_MAX_NEW_TOKENS", 512)
@@ -155,7 +156,7 @@ class OpeaArangoDataprep(OpeaComponent):
                     logger.info(f"An error occurred while verifying the API Key: {e}")
         elif VLLM_ENDPOINT:
             llm = ChatOpenAI(
-                openai_api_key="EMPTY",
+                openai_api_key=VLLM_API_KEY,
                 openai_api_base=f"{VLLM_ENDPOINT}/v1",
                 model=VLLM_MODEL_ID,
                 temperature=VLLM_TEMPERATURE,
