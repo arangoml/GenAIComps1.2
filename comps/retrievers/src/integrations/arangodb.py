@@ -25,6 +25,7 @@ from .config import (
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
+    AQL_QUERY,
     HUGGINGFACEHUB_API_TOKEN,
     OPENAI_API_KEY,
     OPENAI_CHAT_ENABLED,
@@ -127,6 +128,7 @@ class OpeaArangoRetriever(OpeaComponent):
         keys: list[str],
         graph_name: str,
         source_collection_name: str,
+        query_embedding: list[float],
     ) -> dict[str, Any]:
         """Fetch neighborhoods of source documents"""
         neighborhoods = {}
@@ -142,9 +144,31 @@ class OpeaArangoRetriever(OpeaComponent):
             limit_query = ""
         else:
             limit_query = f"""
-                LET score = COSINE_SIMILARITY(doc.{ARANGO_EMBEDDING_FIELD}, s.{ARANGO_EMBEDDING_FIELD})
+                LET score = COSINE_SIMILARITY(doc.{ARANGO_EMBEDDING_FIELD}, {query_embedding})
                 SORT score DESC
                 LIMIT {ARANGO_TRAVERSAL_MAX_RETURNED}
+            """
+        # Use custom AQL query if specified in environment variable
+        neighborhood_query = None
+        if AQL_QUERY:
+            # Use explicit string replacement for reliable formatting
+            neighborhood_query = AQL_QUERY.replace("{graph_name}", graph_name)\
+                                        .replace("{links_to_query}", links_to_query)\
+                                        .replace("{start_vertex}", start_vertex)\
+                                        .replace("{limit_query}", limit_query)\
+                                        .replace("{ARANGO_TEXT_FIELD}", ARANGO_TEXT_FIELD)
+            
+            if logflag:
+                logger.info(f"Using custom source_neighborhood query from set_env.sh config")
+        else:
+            neighborhood_query = f"""
+                FOR v1 IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
+                {links_to_query}
+                    FOR s IN 1..1 OUTBOUND {start_vertex} {graph_name}_HAS_SOURCE
+                        FILTER s._key != doc._key
+                        {limit_query}
+                        COLLECT id = s._key, text = s.{ARANGO_TEXT_FIELD}
+                        RETURN {{[id]: text}}
             """
 
         aql = f"""
@@ -152,13 +176,7 @@ class OpeaArangoRetriever(OpeaComponent):
                 FILTER doc._key IN @keys
 
                 LET source_neighborhood = (
-                    FOR v1 IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
-                        {links_to_query}
-                            FOR s IN 1..1 OUTBOUND {start_vertex} {graph_name}_HAS_SOURCE
-                                FILTER s._key != doc._key
-                                {limit_query}
-                                COLLECT id = s._key, text = s.{ARANGO_TEXT_FIELD}
-                                RETURN {{[id]: text}}
+                    {neighborhood_query}
                 )
 
                 RETURN {{[doc._key]: source_neighborhood}}
@@ -168,6 +186,9 @@ class OpeaArangoRetriever(OpeaComponent):
             "@collection": source_collection_name,
             "keys": keys,
         }
+
+        if logflag:
+            logger.info(f"AQL Query: {aql}")
 
         cursor = vector_db.db.aql.execute(aql, bind_vars=bind_vars)
 
@@ -348,6 +369,7 @@ class OpeaArangoRetriever(OpeaComponent):
                 keys=[r.id for r in search_res],
                 graph_name=graph_name,
                 source_collection_name=source_collection_name,
+                query_embedding=input.embedding,
             )
 
             for r in search_res:
