@@ -152,12 +152,14 @@ class OpeaArangoRetriever(OpeaComponent):
         neighborhood_query = None
         if AQL_QUERY:
             # Use explicit string replacement for reliable formatting
-            neighborhood_query = AQL_QUERY.replace("{graph_name}", graph_name)\
-                                        .replace("{links_to_query}", links_to_query)\
-                                        .replace("{start_vertex}", start_vertex)\
-                                        .replace("{limit_query}", limit_query)\
-                                        .replace("{ARANGO_TEXT_FIELD}", ARANGO_TEXT_FIELD)
-            
+            neighborhood_query = (
+                AQL_QUERY.replace("{graph_name}", graph_name)
+                .replace("{links_to_query}", links_to_query)
+                .replace("{start_vertex}", start_vertex)
+                .replace("{limit_query}", limit_query)
+                .replace("{ARANGO_TEXT_FIELD}", ARANGO_TEXT_FIELD)
+            )
+
             if logflag:
                 logger.info(f"Using custom source_neighborhood query from set_env.sh config")
         else:
