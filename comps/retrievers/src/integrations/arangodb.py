@@ -95,7 +95,7 @@ class OpeaArangoRetriever(OpeaComponent):
                 timeout=VLLM_TIMEOUT,
             )
         else:
-            raise ValueError("No LLM text generation environment variables are set, cannot summarize search results.")
+            raise HTTPException(status_code=400, detail="No LLM environment variables are set, cannot generate graphs.")
 
     def initialize_arangodb(self):
         """Initialize the ArangoDB connection."""
@@ -210,9 +210,7 @@ class OpeaArangoRetriever(OpeaComponent):
             input.documents = []
             empty_result = input
         else:
-            raise ValueError("Invalid input type: ", type(input))
-
-        start = time.time()
+            raise HTTPException(status_code=400, detail=f"Invalid input type {type(input)}: {input}")
 
         query = input.text if isinstance(input, EmbedDoc) else input.input
         embedding = input.embedding if isinstance(input.embedding, list) else None

@@ -166,7 +166,7 @@ class OpeaArangoDataprep(OpeaComponent):
             )
             ignore_tool_usage = True
         else:
-            raise ValueError("No text generation environment variables are set, cannot generate graphs.")
+            raise HTTPException(status_code=400, detail="No LLM environment variables are set, cannot generate graphs.")
 
         try:
             self.llm_transformer = LLMGraphTransformer(
@@ -187,7 +187,8 @@ class OpeaArangoDataprep(OpeaComponent):
             except (TypeError, ValueError) as e:
                 if logflag:
                     logger.error(f"Failed to initialize LLMGraphTransformer: {e}")
-                raise e
+
+                raise HTTPException(status_code=500, detail=f"Failed to initialize LLMGraphTransformer: {e}")
 
         ########################################
         # Text Embeddings Inference (optional) #
@@ -209,7 +210,7 @@ class OpeaArangoDataprep(OpeaComponent):
             # Use local embedding model
             self.embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
         else:
-            raise ValueError("No embeddings environment variables are set, cannot generate embeddings.")
+            raise HTTPException(status_code=400, detail="No embeddings environment variables are set, cannot generate embeddings.")
 
         ############
         # ArangoDB #
