@@ -196,21 +196,10 @@ class OpeaArangoRetriever(OpeaComponent):
 
     async def invoke(
         self, input: Union[EmbedDoc, RetrievalRequest, ChatCompletionRequest]
-    ) -> Union[SearchedDoc, RetrievalResponse, ChatCompletionRequest]:
+    ) -> list:
         """Process the retrieval request and return relevant documents."""
         if logflag:
             logger.info(input)
-
-        if isinstance(input, EmbedDoc):
-            empty_result = SearchedDoc(retrieved_docs=[], initial_query=input.text)
-        elif isinstance(input, RetrievalRequest):
-            empty_result = RetrievalResponse(retrieved_docs=[])
-        elif isinstance(input, ChatCompletionRequest):
-            input.retrieved_docs = []
-            input.documents = []
-            empty_result = input
-        else:
-            raise HTTPException(status_code=400, detail=f"Invalid input type {type(input)}: {input}")
 
         query = input.text if isinstance(input, EmbedDoc) else input.input
         embedding = input.embedding if isinstance(input.embedding, list) else None
@@ -226,14 +215,14 @@ class OpeaArangoRetriever(OpeaComponent):
             if logflag:
                 graph_names = [g["name"] for g in self.db.graphs()]
                 logger.error(f"Graph '{graph_name}' does not exist in ArangoDB. Graphs: {graph_names}")
-            return empty_result
+            return []
 
         if not self.db.graph(graph_name).has_vertex_collection(source_collection_name):
             if logflag:
                 collection_names = self.db.graph(graph_name).vertex_collections()
                 m = f"Collection '{source_collection_name}' does not exist in graph '{graph_name}'. Collections: {collection_names}"
                 logger.error(m)
-            return empty_result
+            return []
 
         collection = self.db.collection(source_collection_name)
         collection_count = collection.count()
@@ -241,13 +230,13 @@ class OpeaArangoRetriever(OpeaComponent):
         if collection_count == 0:
             if logflag:
                 logger.error(f"Collection '{source_collection_name}' is empty.")
-            return empty_result
+            return []
 
         if collection_count < ARANGO_NUM_CENTROIDS:
             if logflag:
                 m = f"Collection '{source_collection_name}' has fewer documents ({collection_count}) than the number of centroids ({ARANGO_NUM_CENTROIDS})."
                 logger.error(m)
-            return empty_result
+            return []
 
         ################################
         # Retrieve Embedding Dimension #
@@ -260,19 +249,19 @@ class OpeaArangoRetriever(OpeaComponent):
         if not embedding:
             if logflag:
                 logger.error(f"Document '{random_doc_id}' is missing field '{ARANGO_EMBEDDING_FIELD}'.")
-            return empty_result
+            return []
 
         if not isinstance(embedding, list):
             if logflag:
                 logger.error(f"Document '{random_doc_id}' has a non-list embedding field, found {type(embedding)}.")
-            return empty_result
+            return []
 
         dimension = len(embedding)
 
         if dimension == 0:
             if logflag:
                 logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
-            return empty_result
+            return []
 
         if OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
             embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=dimension)
@@ -327,12 +316,12 @@ class OpeaArangoRetriever(OpeaComponent):
         except Exception as e:
             if logflag:
                 logger.error(f"Error during similarity search: {e}")
-            return empty_result
+            return []
 
         if not search_res:
             if logflag:
                 logger.info("No documents found.")
-            return empty_result
+            return []
 
         if logflag:
             logger.info(f"Found {len(search_res)} documents.")
