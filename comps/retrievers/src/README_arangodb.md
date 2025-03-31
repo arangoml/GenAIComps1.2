@@ -23,10 +23,10 @@ docker run -d   --name arango-vector-db  -p 8529:8529   -e ARANGO_ROOT_PASSWORD=
 export no_proxy=${your_no_proxy}
 export http_proxy=${your_http_proxy}
 export https_proxy=${your_http_proxy}
-export ARANGO_URL=${your_arangodb_uri}
-export ARANGODB_USERNAME=${your_arangodb_username}
-export ARANGODB_PASSWORD=${your_arangodb_password}
-export ARANGO_DB_NAME=${your_arangodb_database}
+export ARANGO_URL="http://localhost:8529"
+export ARANGODB_USERNAME=root
+export ARANGODB_PASSWORD=test
+export ARANGO_DB_NAME=_system
 
 ```
 
@@ -40,12 +40,32 @@ cd ../../
 docker build -t opea/retriever:latest --build-arg https_proxy=$https_proxy --build-arg http_proxy=$http_proxy -f comps/retrievers/src/Dockerfile .
 ```
 
-### Run Docker with CLI
+
+### With the Docker compose
+
+First, set the env variables:
 
 ```bash
-docker run -d --name="retriever-arango-server" -p 7000:7000 --ipc=host -e http_proxy=$http_proxy -e https_proxy=$https_proxy -e ARANGODB_URL="http://localhost:8529"  opea/retriever:latest -e RETRIEVER_COMPONENT_NAME="OPEA_RETRIEVER_ARANGO"
+
+model=BAAI/bge-base-en-v1.5
+export host_ip="127.0.0.1"
+export TEI_EMBEDDING_ENDPOINT="http://${host_ip}:6060"  # if you want to use the hosted embedding service, example: "http://127.0.0.1:6060"
 ```
 
+Text embeddings inference service expects the `RETRIEVE_MODEL_ID` variable to be set.
+
+```bash
+export EMBEDDING_MODEL_ID=BAAI/bge-base-en-v1.5
+```
+
+Note that following docker compose sets the `network_mode: host` in retriever image to allow local vector store connection.
+This will start the both the embedding and retriever services:
+
+```bash
+cd ../deployment/docker_compose
+export service_name="retriever-arango"
+docker compose -f compose.yaml up ${service_name} -d
+```
 
 
 ## 🚀3. Consume Retriever Service
@@ -72,27 +92,23 @@ curl http://${your_ip}:7000/v1/retrieval \
 
 ```bash
 export your_embedding=$(python -c "import random; embedding = [random.uniform(-1, 1) for _ in range(768)]; print(embedding)")
-curl http://localhost:7000/v1/retrieval \
+curl http://${your_ip}:7000/v1/retrieval \
   -X POST \
   -d "{\"text\":\"What is the revenue of Nike in 2023?\",\"embedding\":${your_embedding},\"search_type\":\"similarity\", \"k\":4}" \
   -H 'Content-Type: application/json'
 ```
 
-
-
 ```bash
 export your_embedding=$(python -c "import random; embedding = [random.uniform(-1, 1) for _ in range(768)]; print(embedding)")
-curl http://localhost:7000/v1/retrieval \
+curl http://${your_ip}:7000/v1/retrieval \
   -X POST \
   -d "{\"text\":\"What is the revenue of Nike in 2023?\",\"embedding\":${your_embedding},\"search_type\":\"similarity_distance_threshold\", \"k\":4, \"distance_threshold\":1.0}" \
   -H 'Content-Type: application/json'
 ```
 
-
-
 ```bash
 export your_embedding=$(python -c "import random; embedding = [random.uniform(-1, 1) for _ in range(768)]; print(embedding)")
-curl http://localhost:7000/v1/retrieval \
+curl http://${your_ip}:7000/v1/retrieval \
   -X POST \
   -d "{\"text\":\"What is the revenue of Nike in 2023?\",\"embedding\":${your_embedding},\"search_type\":\"similarity_score_threshold\", \"k\":4, \"score_threshold\":0.2}" \
   -H 'Content-Type: application/json'
@@ -101,7 +117,7 @@ curl http://localhost:7000/v1/retrieval \
 
 ```bash
 export your_embedding=$(python -c "import random; embedding = [random.uniform(-1, 1) for _ in range(768)]; print(embedding)")
-curl http://localhost:7000/v1/retrieval \
+curl http://${your_ip}:7000/v1/retrieval \
   -X POST \
   -d "{\"text\":\"What is the revenue of Nike in 2023?\",\"embedding\":${your_embedding},\"search_type\":\"mmr\", \"k\":4, \"fetch_k\":20, \"lambda_mult\":0.5}" \
   -H 'Content-Type: application/json'
