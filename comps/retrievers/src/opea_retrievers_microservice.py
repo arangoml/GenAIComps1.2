@@ -36,6 +36,7 @@ from comps import (
 from comps.cores.proto.api_protocol import (
     ChatCompletionRequest,
     RetrievalRequest,
+    RetrievalRequestArangoDB,
     RetrievalResponse,
     RetrievalResponseData,
 )
@@ -59,8 +60,8 @@ loader = OpeaComponentLoader(
     port=7000,
 )
 @register_statistics(names=["opea_service@retrievers"])
-async def ingest_files(
-    input: Union[EmbedDoc, EmbedMultimodalDoc, RetrievalRequest, ChatCompletionRequest]
+async def invoke(
+    input: Union[EmbedDoc, EmbedMultimodalDoc, RetrievalRequest, ChatCompletionRequest, RetrievalRequestArangoDB]
 ) -> Union[SearchedDoc, SearchedMultimodalDoc, RetrievalResponse, ChatCompletionRequest]:
     start = time.time()
 
