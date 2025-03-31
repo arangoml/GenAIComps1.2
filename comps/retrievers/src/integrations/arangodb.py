@@ -8,13 +8,8 @@ from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFace
 from langchain_community.vectorstores.arangodb_vector import ArangoVector
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from comps import CustomLogger, EmbedDoc, OpeaComponent, OpeaComponentRegistry, SearchedDoc, ServiceType
-from comps.cores.proto.api_protocol import (
-    ChatCompletionRequest,
-    RetrievalRequest,
-    RetrievalRequestArangoDB,
-    RetrievalResponse,
-)
+from comps import CustomLogger, EmbedDoc, OpeaComponent, OpeaComponentRegistry, ServiceType
+from comps.cores.proto.api_protocol import RetrievalRequestArangoDB
 
 from .config import (
     ARANGO_DB_NAME,
