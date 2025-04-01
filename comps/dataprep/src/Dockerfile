@@ -17,7 +17,8 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends --fix-missin
     tesseract-ocr \
     libpq-dev \
     libcairo2 \
-    wget
+    wget \
+    git
 
 # Install ffmpeg static build
 RUN cd /root && wget https://johnvansickle.com/ffmpeg/builds/ffmpeg-git-amd64-static.tar.xz && \
@@ -47,6 +48,7 @@ ENV PYTHONPATH=$PYTHONPATH:/home/user
 RUN mkdir -p /home/user/comps/dataprep/src/uploaded_files && chown -R user /home/user/comps/dataprep/src/uploaded_files
 
 USER user
+ENV NLTK_DATA=/home/user/nltk_data
 
 WORKDIR /home/user/comps/dataprep/src
 

@@ -3,6 +3,7 @@ cairosvg
 docarray[full]
 docx2txt
 easyocr
+einops
 fastapi
 future
 graspologic
@@ -16,7 +17,7 @@ python-arango
 langchain_huggingface
 langchain_openai
 langchain_milvus
-llama-index-core
+llama-index-core==0.12.19
 llama-index-embeddings-openai
 llama-index-embeddings-text-embeddings-inference
 llama-index-llms-openai

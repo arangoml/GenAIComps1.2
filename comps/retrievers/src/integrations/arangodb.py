@@ -35,6 +35,7 @@ from .config import (
     SUMMARIZER_ENABLED,
     TEI_EMBED_MODEL,
     TEI_EMBEDDING_ENDPOINT,
+    VLLM_API_KEY,
     VLLM_ENDPOINT,
     VLLM_MAX_NEW_TOKENS,
     VLLM_MODEL_ID,
@@ -85,7 +86,7 @@ class OpeaArangoRetriever(OpeaComponent):
 
         elif VLLM_ENDPOINT:
             self.llm = ChatOpenAI(
-                openai_api_key="EMPTY",
+                openai_api_key=VLLM_API_KEY,
                 openai_api_base=f"{VLLM_ENDPOINT}/v1",
                 model=VLLM_MODEL_ID,
                 temperature=VLLM_TEMPERATURE,
@@ -94,7 +95,7 @@ class OpeaArangoRetriever(OpeaComponent):
                 timeout=VLLM_TIMEOUT,
             )
         else:
-            raise ValueError("No LLM text generation environment variables are set, cannot summarize search results.")
+            raise HTTPException(status_code=400, detail="No LLM environment variables are set, cannot generate graphs.")
 
     def initialize_arangodb(self):
         """Initialize the ArangoDB connection."""
@@ -182,36 +183,23 @@ class OpeaArangoRetriever(OpeaComponent):
             I've performed vector similarity on the following
             query to retrieve most relevant documents: '{query}' 
 
-            Each retrieved Document may have a 'RELATED CHUNKS' section.
+            Each retrieved Document may have a 'RELATED INFORMATION' section.
 
             Please consider summarizing the Document below using the query as the foundation to summarize the text.
 
             The Document: {text}
 
-            Provide a summary to include all content relevant to the query, using the RELATED CHUNKS section (if provided) as needed.
+            Provide a summary to include all content relevant to the query, using the RELATED INFORMATION section (if provided) as needed.
 
             Your summary:
         """
 
     async def invoke(
         self, input: Union[EmbedDoc, RetrievalRequest, ChatCompletionRequest]
-    ) -> Union[SearchedDoc, RetrievalResponse, ChatCompletionRequest]:
+    ) -> list:
         """Process the retrieval request and return relevant documents."""
         if logflag:
             logger.info(input)
-
-        if isinstance(input, EmbedDoc):
-            empty_result = SearchedDoc(retrieved_docs=[], initial_query=input.text)
-        elif isinstance(input, RetrievalRequest):
-            empty_result = RetrievalResponse(retrieved_docs=[])
-        elif isinstance(input, ChatCompletionRequest):
-            input.retrieved_docs = []
-            input.documents = []
-            empty_result = input
-        else:
-            raise ValueError("Invalid input type: ", type(input))
-
-        start = time.time()
 
         query = input.text if isinstance(input, EmbedDoc) else input.input
         embedding = input.embedding if isinstance(input.embedding, list) else None
@@ -227,14 +215,14 @@ class OpeaArangoRetriever(OpeaComponent):
             if logflag:
                 graph_names = [g["name"] for g in self.db.graphs()]
                 logger.error(f"Graph '{graph_name}' does not exist in ArangoDB. Graphs: {graph_names}")
-            return empty_result
+            return []
 
         if not self.db.graph(graph_name).has_vertex_collection(source_collection_name):
             if logflag:
                 collection_names = self.db.graph(graph_name).vertex_collections()
                 m = f"Collection '{source_collection_name}' does not exist in graph '{graph_name}'. Collections: {collection_names}"
                 logger.error(m)
-            return empty_result
+            return []
 
         collection = self.db.collection(source_collection_name)
         collection_count = collection.count()
@@ -242,13 +230,13 @@ class OpeaArangoRetriever(OpeaComponent):
         if collection_count == 0:
             if logflag:
                 logger.error(f"Collection '{source_collection_name}' is empty.")
-            return empty_result
+            return []
 
         if collection_count < ARANGO_NUM_CENTROIDS:
             if logflag:
                 m = f"Collection '{source_collection_name}' has fewer documents ({collection_count}) than the number of centroids ({ARANGO_NUM_CENTROIDS})."
                 logger.error(m)
-            return empty_result
+            return []
 
         ################################
         # Retrieve Embedding Dimension #
@@ -261,19 +249,19 @@ class OpeaArangoRetriever(OpeaComponent):
         if not embedding:
             if logflag:
                 logger.error(f"Document '{random_doc_id}' is missing field '{ARANGO_EMBEDDING_FIELD}'.")
-            return empty_result
+            return []
 
         if not isinstance(embedding, list):
             if logflag:
                 logger.error(f"Document '{random_doc_id}' has a non-list embedding field, found {type(embedding)}.")
-            return empty_result
+            return []
 
         dimension = len(embedding)
 
         if dimension == 0:
             if logflag:
                 logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
-            return empty_result
+            return []
 
         if OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
             embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=dimension)
@@ -328,12 +316,12 @@ class OpeaArangoRetriever(OpeaComponent):
         except Exception as e:
             if logflag:
                 logger.error(f"Error during similarity search: {e}")
-            return empty_result
+            return []
 
         if not search_res:
             if logflag:
                 logger.info("No documents found.")
-            return empty_result
+            return []
 
         if logflag:
             logger.info(f"Found {len(search_res)} documents.")
@@ -353,7 +341,7 @@ class OpeaArangoRetriever(OpeaComponent):
             for r in search_res:
                 neighborhood = neighborhoods.get(r.id)
                 if neighborhood:
-                    r.page_content += "\n------\nRELATED CHUNKS:\n------\n"
+                    r.page_content += "\n------\nRELATED INFORMATION:\n------\n"
                     r.page_content += str(neighborhood)
 
             if logflag:

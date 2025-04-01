@@ -7,6 +7,7 @@ import time
 from typing import List, Optional, Union
 
 from fastapi import Body, File, Form, UploadFile
+from integrations.arangodb import OpeaArangoDataprep
 from integrations.elasticsearch import OpeaElasticSearchDataprep
 from integrations.milvus import OpeaMilvusDataprep
 from integrations.neo4j_llamaindex import OpeaNeo4jLlamaIndexDataprep
@@ -55,6 +56,7 @@ async def ingest_files(
     chunk_overlap: int = Form(100),
     process_table: bool = Form(False),
     table_strategy: str = Form("fast"),
+    ingest_from_graphDB: bool = Form(False),
 ):
     start = time.time()
 
@@ -64,7 +66,9 @@ async def ingest_files(
 
     try:
         # Use the loader to invoke the component
-        response = await loader.ingest_files(files, link_list, chunk_size, chunk_overlap, process_table, table_strategy)
+        response = await loader.ingest_files(
+            files, link_list, chunk_size, chunk_overlap, process_table, table_strategy, ingest_from_graphDB
+        )
         # Log the result if logging is enabled
         if logflag:
             logger.info(f"[ ingest ] Output generated: {response}")
