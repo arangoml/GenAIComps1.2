@@ -4,8 +4,8 @@ from typing import Any, Union
 
 import openai
 from arango import ArangoClient
+from langchain_arangodb import ArangoVector
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
-from langchain_community.vectorstores.arangodb_vector import ArangoVector
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from comps import CustomLogger, EmbedDoc, OpeaComponent, OpeaComponentRegistry, SearchedDoc, ServiceType
@@ -194,9 +194,7 @@ class OpeaArangoRetriever(OpeaComponent):
             Your summary:
         """
 
-    async def invoke(
-        self, input: Union[EmbedDoc, RetrievalRequest, ChatCompletionRequest]
-    ) -> list:
+    async def invoke(self, input: Union[EmbedDoc, RetrievalRequest, ChatCompletionRequest]) -> list:
         """Process the retrieval request and return relevant documents."""
         if logflag:
             logger.info(input)
