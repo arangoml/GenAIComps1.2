@@ -128,7 +128,6 @@ class RetrievalRequestArangoDB(RetrievalRequest):
     distance_strategy: str | None = None # COSINE, EUCLIDEAN
     use_approx_search: bool | None = None
 
-
 class RetrievalResponseData(BaseModel):
     text: str
     metadata: Optional[Dict[str, Any]] = None
