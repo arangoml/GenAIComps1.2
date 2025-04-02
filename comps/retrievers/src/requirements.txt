@@ -12,7 +12,6 @@ langchain-elasticsearch
 langchain-pinecone
 langchain
 langchain-community
-langchain-experimental
 # langchain-arangodb
 # git+https://github.com/arangoml/langchain.git@master#subdirectory=libs/community
 git+https://github.com/arangoml/langchain-arangodb#subdirectory=libs/arangodb
