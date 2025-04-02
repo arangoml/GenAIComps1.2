@@ -9,8 +9,8 @@ import openai
 from arango import ArangoClient
 from fastapi import Body, File, Form, HTTPException, UploadFile
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_arangodb import ArangoGraph
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
-from langchain_community.graphs.arangodb_graph import ArangoGraph
 from langchain_community.llms import HuggingFaceEndpoint
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -210,7 +210,9 @@ class OpeaArangoDataprep(OpeaComponent):
             # Use local embedding model
             self.embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
         else:
-            raise HTTPException(status_code=400, detail="No embeddings environment variables are set, cannot generate embeddings.")
+            raise HTTPException(
+                status_code=400, detail="No embeddings environment variables are set, cannot generate embeddings."
+            )
 
         ############
         # ArangoDB #

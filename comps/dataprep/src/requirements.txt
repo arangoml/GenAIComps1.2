@@ -14,8 +14,10 @@ html2text
 huggingface_hub
 ipython
 langchain
-#langchain-community
-git+https://github.com/arangoml/langchain.git@master#subdirectory=libs/community
+langchain-community
+# langchain-arangodb
+# git+https://github.com/arangoml/langchain.git@master#subdirectory=libs/community
+git+https://github.com/arangoml/langchain-arangodb#subdirectory=libs/arangodb
 langchain-elasticsearch
 langchain-experimental
 langchain-openai
