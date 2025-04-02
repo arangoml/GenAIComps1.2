@@ -14,11 +14,9 @@ from comps.cores.proto.api_protocol import RetrievalRequestArangoDB
 from .config import (
     ARANGO_DB_NAME,
     ARANGO_DISTANCE_STRATEGY,
-    ARANGO_EMBEDDING_FIELD,
     ARANGO_GRAPH_NAME,
     ARANGO_NUM_CENTROIDS,
     ARANGO_PASSWORD,
-    ARANGO_TEXT_FIELD,
     ARANGO_TRAVERSAL_ENABLED,
     ARANGO_TRAVERSAL_MAX_DEPTH,
     ARANGO_TRAVERSAL_MAX_RETURNED,
@@ -47,6 +45,8 @@ from .config import (
 logger = CustomLogger("retriever_arango")
 logflag = os.getenv("LOGFLAG", False)
 
+ARANGO_TEXT_FIELD = "text"
+ARANGO_EMBEDDING_FIELD = "embedding"
 
 @OpeaComponentRegistry.register("OPEA_RETRIEVER_ARANGO")
 class OpeaArangoRetriever(OpeaComponent):
@@ -212,7 +212,7 @@ class OpeaArangoRetriever(OpeaComponent):
         # Process Input #
         #################
 
-        query = input.text if isinstance(input, EmbedDoc) else input.input
+        query = input.input
         embedding = input.embedding if isinstance(input.embedding, list) else None
         graph_name = input.graph_name or ARANGO_GRAPH_NAME
         search_start = input.search_start

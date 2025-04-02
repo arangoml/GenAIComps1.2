@@ -202,8 +202,6 @@ ARANGO_DB_NAME = os.getenv("ARANGO_DB_NAME", "_system")
 ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 ARANGO_DISTANCE_STRATEGY = os.getenv("ARANGO_DISTANCE_STRATEGY", "COSINE")
 ARANGO_USE_APPROX_SEARCH = os.getenv("ARANGO_USE_APPROX_SEARCH", "false").lower() == "true"
-ARANGO_TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "text")
-ARANGO_EMBEDDING_FIELD = os.getenv("ARANGO_EMBEDDING_FIELD", "embedding")
 ARANGO_NUM_CENTROIDS = os.getenv("ARANGO_NUM_CENTROIDS", 1)
 
 # ArangoDB Traversal configuration
