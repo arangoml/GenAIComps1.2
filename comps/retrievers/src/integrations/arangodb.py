@@ -159,7 +159,7 @@ class OpeaArangoRetriever(OpeaComponent):
                     FOR chunk IN {graph_name}_SOURCE
                         FILTER chunk._key == edge.source_id
                         LIMIT 1
-                        RETURN {{[edge.str]: chunk.{ARANGO_TEXT_FIELD}}}
+                        RETURN {{[edge.{ARANGO_TEXT_FIELD}]: chunk.{ARANGO_TEXT_FIELD}}}
             """
 
         query = f"""
