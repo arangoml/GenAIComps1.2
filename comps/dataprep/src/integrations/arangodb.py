@@ -11,10 +11,8 @@ from fastapi import Body, File, Form, HTTPException, UploadFile
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_arangodb import ArangoGraph
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
-from langchain_community.llms import HuggingFaceEndpoint
 from langchain_core.documents import Document
-from langchain_core.embeddings import Embeddings
-from langchain_core.prompts import BasePromptTemplate, ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import HTMLHeaderTextSplitter
@@ -24,7 +22,6 @@ from comps.dataprep.src.utils import (
     decode_filename,
     document_loader,
     encode_filename,
-    format_file_list,
     get_separators,
     get_tables_result,
     parse_html,
