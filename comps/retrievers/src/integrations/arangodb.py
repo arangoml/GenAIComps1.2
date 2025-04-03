@@ -1,6 +1,5 @@
 import os
-import time
-from typing import Any, Union
+from typing import Any
 
 import openai
 from arango import ArangoClient
@@ -8,7 +7,7 @@ from langchain_arangodb import ArangoVector
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from comps import CustomLogger, EmbedDoc, OpeaComponent, OpeaComponentRegistry, ServiceType
+from comps import CustomLogger, OpeaComponent, OpeaComponentRegistry, ServiceType
 from comps.cores.proto.api_protocol import RetrievalRequestArangoDB
 
 from .config import (
@@ -26,6 +25,7 @@ from .config import (
     HUGGINGFACEHUB_API_TOKEN,
     OPENAI_API_KEY,
     OPENAI_CHAT_ENABLED,
+    OPENAI_CHAT_MAX_TOKENS,
     OPENAI_CHAT_MODEL,
     OPENAI_CHAT_TEMPERATURE,
     OPENAI_EMBED_ENABLED,
@@ -47,6 +47,7 @@ logflag = os.getenv("LOGFLAG", False)
 
 ARANGO_TEXT_FIELD = "text"
 ARANGO_EMBEDDING_FIELD = "embedding"
+
 
 @OpeaComponentRegistry.register("OPEA_RETRIEVER_ARANGO")
 class OpeaArangoRetriever(OpeaComponent):
@@ -76,7 +77,9 @@ class OpeaArangoRetriever(OpeaComponent):
                 openai.models.list()
                 if logflag:
                     logger.info("OpenAI API Key is valid.")
-                self.llm = ChatOpenAI(temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=512)
+                self.llm = ChatOpenAI(
+                    temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=OPENAI_CHAT_MAX_TOKENS
+                )
             except openai.error.AuthenticationError:
                 if logflag:
                     logger.info("OpenAI API Key is invalid.")
@@ -218,9 +221,9 @@ class OpeaArangoRetriever(OpeaComponent):
         search_start = input.search_start
         enable_traversal = input.enable_traversal or ARANGO_TRAVERSAL_ENABLED
         enable_summarizer = input.enable_summarizer or SUMMARIZER_ENABLED
-        num_centroids = input.num_centroids or ARANGO_NUM_CENTROIDS
         distance_strategy = input.distance_strategy or ARANGO_DISTANCE_STRATEGY
         use_approx_search = input.use_approx_search or ARANGO_USE_APPROX_SEARCH
+        num_centroids = input.num_centroids or ARANGO_NUM_CENTROIDS
 
         search_start = input.search_start
         if search_start == "node":
@@ -265,7 +268,7 @@ class OpeaArangoRetriever(OpeaComponent):
 
         if collection_count < num_centroids:
             if logflag:
-                m = f"Collection '{collection_name}' has fewer documents ({collection_count}) than the number of centroids ({num_centroids})."
+                m = f"Collection '{collection_name}' has fewer documents ({collection_count}) than the number of centroids ({num_centroids}). Please adjust the number of centroids."
                 logger.error(m)
             return []
 
