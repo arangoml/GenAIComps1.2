@@ -60,8 +60,8 @@ loader = OpeaComponentLoader(
     port=7000,
 )
 @register_statistics(names=["opea_service@retrievers"])
-async def invoke(
-    input: Union[EmbedDoc, EmbedMultimodalDoc, RetrievalRequest, ChatCompletionRequest, RetrievalRequestArangoDB]
+async def retrieve_docs(
+    input: Union[EmbedDoc, EmbedMultimodalDoc, RetrievalRequest, RetrievalRequestArangoDB, ChatCompletionRequest]
 ) -> Union[SearchedDoc, SearchedMultimodalDoc, RetrievalResponse, ChatCompletionRequest]:
     start = time.time()
 
