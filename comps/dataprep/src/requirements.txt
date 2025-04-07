@@ -1,6 +1,5 @@
 beautifulsoup4
 cairosvg
-cityhash
 decord
 docarray[full]
 docling
@@ -53,7 +52,6 @@ psycopg2
 pymupdf
 pyspark
 pytesseract
-python-arango
 python-bidi
 python-docx
 python-pptx
