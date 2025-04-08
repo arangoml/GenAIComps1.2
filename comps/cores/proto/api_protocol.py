@@ -127,6 +127,8 @@ class RetrievalRequestArangoDB(RetrievalRequest):
     num_centroids: int | None = None
     distance_strategy: str | None = None # COSINE, EUCLIDEAN
     use_approx_search: bool | None = None
+    traversal_max_depth: int | None = None
+    traversal_max_returned: int | None = None
 
 class RetrievalResponseData(BaseModel):
     text: str

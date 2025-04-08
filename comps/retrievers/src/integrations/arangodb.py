@@ -3,6 +3,7 @@ from typing import Any
 
 import openai
 from arango import ArangoClient
+from arango.database import StandardDatabase
 from langchain_arangodb import ArangoVector
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -127,22 +128,35 @@ class OpeaArangoRetriever(OpeaComponent):
 
     def fetch_neighborhoods(
         self,
-        vector_db: ArangoVector,
+        db: StandardDatabase,
         keys: list[str],
         graph_name: str,
         search_start: str,
         query_embedding: list[float],
         collection_name: str,
+        traversal_max_depth: int,
+        traversal_max_returned: int,
     ) -> dict[str, Any]:
         """Fetch the neighborhoods of matched documents"""
+
+        if traversal_max_depth < 1:
+            traversal_max_depth = 1
+        
+        if traversal_max_returned < 1:
+            traversal_max_returned = 1
 
         sub_query = ""
         neighborhoods = {}
 
         if search_start == "chunk":
-            # No traversal for chunk
-            # TODO: What would this look like?
-            return neighborhoods
+            sub_query = f"""
+                FOR node IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
+                    FOR node2, edge IN 1..{traversal_max_depth} ANY node {graph_name}_LINKS_TO
+                        LET score = COSINE_SIMILARITY(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
+                        SORT score DESC
+                        LIMIT {traversal_max_returned}
+                        RETURN edge.{ARANGO_TEXT_FIELD}
+            """
 
         elif search_start == "edge":
             sub_query = f"""
@@ -154,10 +168,10 @@ class OpeaArangoRetriever(OpeaComponent):
 
         elif search_start == "node":
             sub_query = f"""
-                FOR node, edge IN 1..{ARANGO_TRAVERSAL_MAX_DEPTH} ANY doc {graph_name}_LINKS_TO
+                FOR node, edge IN 1..{traversal_max_depth} ANY doc {graph_name}_LINKS_TO
                     LET score = COSINE_SIMILARITY(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
                     SORT score DESC
-                    LIMIT {ARANGO_TRAVERSAL_MAX_RETURNED}
+                    LIMIT {traversal_max_returned}
 
                     FOR chunk IN {graph_name}_SOURCE
                         FILTER chunk._key == edge.source_id
@@ -182,7 +196,7 @@ class OpeaArangoRetriever(OpeaComponent):
             "keys": keys,
         }
 
-        cursor = vector_db.db.aql.execute(query, bind_vars=bind_vars)
+        cursor = db.aql.execute(query, bind_vars=bind_vars)
 
         for doc in cursor:
             neighborhoods.update(doc)
@@ -224,6 +238,8 @@ class OpeaArangoRetriever(OpeaComponent):
         distance_strategy = input.distance_strategy or ARANGO_DISTANCE_STRATEGY
         use_approx_search = input.use_approx_search or ARANGO_USE_APPROX_SEARCH
         num_centroids = input.num_centroids or ARANGO_NUM_CENTROIDS
+        traversal_max_depth = input.traversal_max_depth or ARANGO_TRAVERSAL_MAX_DEPTH
+        traversal_max_returned = input.traversal_max_returned or ARANGO_TRAVERSAL_MAX_RETURNED
 
         search_start = input.search_start
         if search_start == "node":
@@ -365,12 +381,17 @@ class OpeaArangoRetriever(OpeaComponent):
         ########################################
 
         if enable_traversal:
+            keys = [r.id for r in search_res]
+
             neighborhoods = self.fetch_neighborhoods(
-                vector_db=vector_db,
-                keys=[r.id for r in search_res],
+                db=vector_db.db,
+                keys=keys,
                 graph_name=graph_name,
                 search_start=search_start,
                 query_embedding=embedding,
+                collection_name=collection_name,
+                traversal_max_depth=traversal_max_depth,
+                traversal_max_returned=traversal_max_returned,
             )
 
             for r in search_res:
