@@ -203,17 +203,25 @@ class OpeaArangoRetriever(OpeaComponent):
 
         return neighborhoods
 
-    def generate_prompt(self, query: str, text: str) -> str:
+    def generate_summarization_prompt(self, query: str, text: str) -> str:
         """Generate a prompt for summarization."""
         return f"""
             I've performed vector similarity on the following
             query to retrieve most relevant documents: '{query}' 
 
-            Each retrieved Document may have a 'RELATED INFORMATION' section.
+            Each Document retrieved may have a 'RELATED INFORMATION' section.
 
-            Please consider summarizing the Document below using the query as the foundation to summarize the text.
+            Summarize the Document below using the query as the foundation to your summary.
 
-            The Document: {text}
+            Discard any unrelated information that is not relevant to the query.
+
+            If the Document has a 'RELATED INFORMATION' section, use it to help you summarize the Document.
+
+            The document is as follows:
+
+            ------
+            {text}
+            ------
 
             Provide a summary to include all content relevant to the query, using the RELATED INFORMATION section (if provided) as needed.
 
@@ -409,7 +417,7 @@ class OpeaArangoRetriever(OpeaComponent):
 
         if enable_summarizer:
             for r in search_res:
-                prompt = self.generate_prompt(query, r.page_content)
+                prompt = self.generate_summarization_prompt(query, r.page_content)
                 res = self.llm.invoke(prompt)
                 summarized_text = res.content
 
