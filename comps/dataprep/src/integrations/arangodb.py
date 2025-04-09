@@ -43,6 +43,7 @@ ARANGO_INSERT_ASYNC = os.getenv("ARANGO_INSERT_ASYNC", False)
 ARANGO_BATCH_SIZE = os.getenv("ARANGO_BATCH_SIZE", 1000)
 ARANGO_USE_GRAPH_NAME = os.getenv("ARANGO_USE_GRAPH_NAME", True)
 ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
+ENTITY_CAPITALIZATION_STRATEGY = os.getenv("ENTITY_CAPITALIZATION_STRATEGY", "upper")
 
 # VLLM configuration
 VLLM_API_KEY = os.getenv("VLLM_API_KEY", "EMPTY")
@@ -328,6 +329,7 @@ class OpeaArangoDataprep(OpeaComponent):
                 embed_source=EMBED_SOURCE_DOCUMENTS,
                 embed_nodes=EMBED_NODES,
                 embed_relationships=EMBED_RELATIONSHIPS,
+                captialization_strategy=ENTITY_CAPITALIZATION_STRATEGY,
             )
 
             if logflag:
