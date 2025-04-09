@@ -120,15 +120,16 @@ class RetrievalRequest(BaseModel):
     request_type: Literal["retrieval"] = "retrieval"
 
 class RetrievalRequestArangoDB(RetrievalRequest):
-    search_start: str = "node" # edge, chunk
-    graph_name: str | None = "GRAPH"
-    enable_traversal: bool | None = None
-    enable_summarizer: bool | None = None
+    graph_name: str | None = None
+    search_start: str | None = None
     num_centroids: int | None = None
     distance_strategy: str | None = None # COSINE, EUCLIDEAN
     use_approx_search: bool | None = None
+    enable_traversal: bool | None = None
+    enable_summarizer: bool | None = None
     traversal_max_depth: int | None = None
     traversal_max_returned: int | None = None
+    traversal_score_threshold: float | None = None
 
 class RetrievalResponseData(BaseModel):
     text: str

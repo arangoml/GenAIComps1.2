@@ -23,6 +23,8 @@ from .config import (
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
+    ARANGO_SEARCH_START,
+    ARANGO_TRAVERSAL_SCORE_THRESHOLD,
     HUGGINGFACEHUB_API_TOKEN,
     OPENAI_API_KEY,
     OPENAI_CHAT_ENABLED,
@@ -136,6 +138,7 @@ class OpeaArangoRetriever(OpeaComponent):
         collection_name: str,
         traversal_max_depth: int,
         traversal_max_returned: int,
+        traversal_score_threshold: float
     ) -> dict[str, Any]:
         """Fetch the neighborhoods of matched documents"""
 
@@ -161,6 +164,7 @@ class OpeaArangoRetriever(OpeaComponent):
                     FOR node2, edge IN 1..{traversal_max_depth} ANY node {graph_name}_LINKS_TO
                         LET score = COSINE_SIMILARITY(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
                         SORT score DESC
+                        FILTER score >= {traversal_score_threshold}
                         LIMIT {traversal_max_returned}
                         RETURN edge.{ARANGO_TEXT_FIELD}
             """
@@ -180,6 +184,7 @@ class OpeaArangoRetriever(OpeaComponent):
                 FOR node, edge IN 1..{traversal_max_depth} ANY doc {graph_name}_LINKS_TO
                     LET score = COSINE_SIMILARITY(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
                     SORT score DESC
+                    FILTER score >= {traversal_score_threshold}
                     LIMIT {traversal_max_returned}
 
                     FOR chunk IN {graph_name}_SOURCE
@@ -243,7 +248,7 @@ class OpeaArangoRetriever(OpeaComponent):
         query = input.input
         embedding = input.embedding if isinstance(input.embedding, list) else None
         graph_name = input.graph_name or ARANGO_GRAPH_NAME
-        search_start = input.search_start
+        search_start = input.search_start or ARANGO_SEARCH_START
         enable_traversal = input.enable_traversal or ARANGO_TRAVERSAL_ENABLED
         enable_summarizer = input.enable_summarizer or SUMMARIZER_ENABLED
         distance_strategy = input.distance_strategy or ARANGO_DISTANCE_STRATEGY
@@ -251,8 +256,8 @@ class OpeaArangoRetriever(OpeaComponent):
         num_centroids = input.num_centroids or ARANGO_NUM_CENTROIDS
         traversal_max_depth = input.traversal_max_depth or ARANGO_TRAVERSAL_MAX_DEPTH
         traversal_max_returned = input.traversal_max_returned or ARANGO_TRAVERSAL_MAX_RETURNED
+        traversal_score_threshold = input.traversal_score_threshold or ARANGO_TRAVERSAL_SCORE_THRESHOLD
 
-        search_start = input.search_start
         if search_start == "node":
             collection_name = f"{graph_name}_ENTITY"
         elif search_start == "edge":
@@ -406,6 +411,7 @@ class OpeaArangoRetriever(OpeaComponent):
                 collection_name=collection_name,
                 traversal_max_depth=traversal_max_depth,
                 traversal_max_returned=traversal_max_returned,
+                traversal_score_threshold=traversal_score_threshold
             )
 
             for r in search_res:
