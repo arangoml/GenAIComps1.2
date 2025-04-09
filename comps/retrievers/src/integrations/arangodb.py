@@ -163,12 +163,14 @@ class OpeaArangoRetriever(OpeaComponent):
             if "@query_embedding" in sub_query:
                 bind_vars["query_embedding"] = query_embedding
 
-            sub_query.replace("{graph_name}", graph_name)
-            sub_query.replace("{traversal_max_depth}", str(traversal_max_depth))
-            sub_query.replace("{traversal_max_returned}", str(traversal_max_returned))
-            sub_query.replace("{traversal_score_threshold}", str(traversal_score_threshold))
-            sub_query.replace("{ARANGO_EMBEDDING_FIELD}", ARANGO_EMBEDDING_FIELD)
-            sub_query.replace("{ARANGO_TEXT_FIELD}", ARANGO_TEXT_FIELD)
+            sub_query = sub_query.format(
+                graph_name=graph_name,
+                traversal_max_depth=traversal_max_depth,
+                traversal_max_returned=traversal_max_returned,
+                traversal_score_threshold=traversal_score_threshold,
+                ARANGO_EMBEDDING_FIELD=ARANGO_EMBEDDING_FIELD,
+                ARANGO_TEXT_FIELD=ARANGO_TEXT_FIELD,
+            )
 
         elif search_start == "chunk":
             bind_vars["query_embedding"] = query_embedding
