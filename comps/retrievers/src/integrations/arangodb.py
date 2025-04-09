@@ -275,7 +275,10 @@ class OpeaArangoRetriever(OpeaComponent):
                 logger.error(f"Graph '{graph_name}' does not exist in ArangoDB. Graphs: {graph_names}")
             return []
 
-        if not self.db.graph(graph_name).has_vertex_collection(collection_name):
+        v_col_exists = self.db.graph(graph_name).has_vertex_collection(collection_name)
+        e_col_exists = self.db.graph(graph_name).has_edge_collection(collection_name)
+
+        if not (v_col_exists or e_col_exists):
             if logflag:
                 collection_names = self.db.graph(graph_name).vertex_collections()
                 m = f"Collection '{collection_name}' does not exist in graph '{graph_name}'. Collections: {collection_names}"
