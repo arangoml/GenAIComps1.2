@@ -329,7 +329,7 @@ class OpeaArangoDataprep(OpeaComponent):
                 embed_source=EMBED_SOURCE_DOCUMENTS,
                 embed_nodes=EMBED_NODES,
                 embed_relationships=EMBED_RELATIONSHIPS,
-                captialization_strategy=ENTITY_CAPITALIZATION_STRATEGY,
+                capitalization_strategy=ENTITY_CAPITALIZATION_STRATEGY,
             )
 
             if logflag:
