@@ -148,7 +148,14 @@ class OpeaArangoRetriever(OpeaComponent):
         sub_query = ""
         neighborhoods = {}
 
+        bind_vars = {
+            "@collection": collection_name,
+            "keys": keys,
+        }
+
         if search_start == "chunk":
+            bind_vars["query_embedding"] = query_embedding
+
             sub_query = f"""
                 FOR node IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
                     FOR node2, edge IN 1..{traversal_max_depth} ANY node {graph_name}_LINKS_TO
@@ -167,6 +174,8 @@ class OpeaArangoRetriever(OpeaComponent):
             """
 
         elif search_start == "node":
+            bind_vars["query_embedding"] = query_embedding
+
             sub_query = f"""
                 FOR node, edge IN 1..{traversal_max_depth} ANY doc {graph_name}_LINKS_TO
                     LET score = COSINE_SIMILARITY(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
@@ -189,12 +198,6 @@ class OpeaArangoRetriever(OpeaComponent):
 
                 RETURN {{[doc._key]: neighborhood}}
         """
-
-        bind_vars = {
-            "@collection": collection_name,
-            "query_embedding": query_embedding,
-            "keys": keys,
-        }
 
         cursor = db.aql.execute(query, bind_vars=bind_vars)
 
