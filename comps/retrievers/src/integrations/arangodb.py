@@ -17,6 +17,7 @@ from .config import (
     ARANGO_GRAPH_NAME,
     ARANGO_NUM_CENTROIDS,
     ARANGO_PASSWORD,
+    ARANGO_TRAVERSAL_QUERY,
     ARANGO_TRAVERSAL_ENABLED,
     ARANGO_TRAVERSAL_MAX_DEPTH,
     ARANGO_TRAVERSAL_MAX_RETURNED,
@@ -156,7 +157,20 @@ class OpeaArangoRetriever(OpeaComponent):
             "keys": keys,
         }
 
-        if search_start == "chunk":
+        if ARANGO_TRAVERSAL_QUERY:
+            sub_query = ARANGO_TRAVERSAL_QUERY
+
+            if "@query_embedding" in sub_query:
+                bind_vars["query_embedding"] = query_embedding
+
+            sub_query.replace("{graph_name}", graph_name)
+            sub_query.replace("{traversal_max_depth}", str(traversal_max_depth))
+            sub_query.replace("{traversal_max_returned}", str(traversal_max_returned))
+            sub_query.replace("{traversal_score_threshold}", str(traversal_score_threshold))
+            sub_query.replace("{ARANGO_EMBEDDING_FIELD}", ARANGO_EMBEDDING_FIELD)
+            sub_query.replace("{ARANGO_TEXT_FIELD}", ARANGO_TEXT_FIELD)
+
+        elif search_start == "chunk":
             bind_vars["query_embedding"] = query_embedding
 
             sub_query = f"""
@@ -203,6 +217,10 @@ class OpeaArangoRetriever(OpeaComponent):
 
                 RETURN {{[doc._key]: neighborhood}}
         """
+
+        if logflag:
+            logger.info(f"Executing query: {query}")
+            logger.info(f"Bind variables: {bind_vars.keys()}")
 
         cursor = db.aql.execute(query, bind_vars=bind_vars)
 
