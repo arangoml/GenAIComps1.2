@@ -49,5 +49,3 @@ sentence_transformers
 shortuuid
 tiktoken
 uvicorn
-python-arango
-cityhash
