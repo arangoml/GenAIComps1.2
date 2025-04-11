@@ -7,7 +7,7 @@ set -x
 WORKPATH=$(dirname "$PWD")
 LOG_PATH="$WORKPATH/tests"
 ip_address=$(hostname -I | awk '{print $1}')
-DATAPREP_PORT="11108"
+export DATAPREP_PORT="11108"
 TEI_EMBEDDER_PORT="10221"
 export TAG="comps"
 export DATA_PATH=${model_cache}
@@ -41,7 +41,8 @@ function start_service() {
     service_name="redis-vector-db tei-embedding-serving dataprep-redis"
     cd $WORKPATH/comps/dataprep/deployment/docker_compose/
     docker compose up ${service_name} -d
-    sleep 1m
+
+    check_healthy "dataprep-redis-server" || exit 1
 }
 
 function validate_microservice() {
