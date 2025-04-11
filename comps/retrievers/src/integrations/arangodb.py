@@ -17,15 +17,15 @@ from .config import (
     ARANGO_GRAPH_NAME,
     ARANGO_NUM_CENTROIDS,
     ARANGO_PASSWORD,
-    ARANGO_TRAVERSAL_QUERY,
+    ARANGO_SEARCH_START,
     ARANGO_TRAVERSAL_ENABLED,
     ARANGO_TRAVERSAL_MAX_DEPTH,
     ARANGO_TRAVERSAL_MAX_RETURNED,
+    ARANGO_TRAVERSAL_QUERY,
+    ARANGO_TRAVERSAL_SCORE_THRESHOLD,
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
-    ARANGO_SEARCH_START,
-    ARANGO_TRAVERSAL_SCORE_THRESHOLD,
     HUGGINGFACEHUB_API_TOKEN,
     OPENAI_API_KEY,
     OPENAI_CHAT_ENABLED,
@@ -139,15 +139,32 @@ class OpeaArangoRetriever(OpeaComponent):
         collection_name: str,
         traversal_max_depth: int,
         traversal_max_returned: int,
-        traversal_score_threshold: float
+        traversal_score_threshold: float,
+        traversal_query: str,
+        distance_strategy: str,
     ) -> dict[str, Any]:
         """Fetch the neighborhoods of matched documents"""
 
         if traversal_max_depth < 1:
             traversal_max_depth = 1
-        
+
         if traversal_max_returned < 1:
             traversal_max_returned = 1
+
+        score_func = ""
+        sort_order = ""
+
+        if distance_strategy == "COSINE":
+            score_func = "COSINE_SIMILARITY"
+            sort_order = "DESC"
+        elif distance_strategy == "EUCLIDEAN_DISTANCE":
+            score_func = "L2_DISTANCE"
+            sort_order = "ASC"
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid distance strategy: {distance_strategy}. Expected 'COSINE' or 'EUCLIDEAN_DISTANCE'.",
+            )
 
         sub_query = ""
         neighborhoods = {}
@@ -157,13 +174,8 @@ class OpeaArangoRetriever(OpeaComponent):
             "keys": keys,
         }
 
-        if ARANGO_TRAVERSAL_QUERY:
-            sub_query = ARANGO_TRAVERSAL_QUERY
-
-            if "@query_embedding" in sub_query:
-                bind_vars["query_embedding"] = query_embedding
-
-            sub_query = sub_query.format(
+        if traversal_query:
+            sub_query = traversal_query.format(
                 graph_name=graph_name,
                 traversal_max_depth=traversal_max_depth,
                 traversal_max_returned=traversal_max_returned,
@@ -172,16 +184,19 @@ class OpeaArangoRetriever(OpeaComponent):
                 ARANGO_TEXT_FIELD=ARANGO_TEXT_FIELD,
             )
 
+            if "@query_embedding" in sub_query:
+                bind_vars["query_embedding"] = query_embedding
+
         elif search_start == "chunk":
             bind_vars["query_embedding"] = query_embedding
 
             sub_query = f"""
                 FOR node IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
                     FOR node2, edge IN 1..{traversal_max_depth} ANY node {graph_name}_LINKS_TO
-                        LET score = COSINE_SIMILARITY(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
-                        SORT score DESC
-                        FILTER score >= {traversal_score_threshold}
+                        LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
+                        SORT score {sort_order}
                         LIMIT {traversal_max_returned}
+                        FILTER score >= {traversal_score_threshold}
                         RETURN edge.{ARANGO_TEXT_FIELD}
             """
 
@@ -198,10 +213,10 @@ class OpeaArangoRetriever(OpeaComponent):
 
             sub_query = f"""
                 FOR node, edge IN 1..{traversal_max_depth} ANY doc {graph_name}_LINKS_TO
-                    LET score = COSINE_SIMILARITY(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
-                    SORT score DESC
-                    FILTER score >= {traversal_score_threshold}
+                    LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
+                    SORT score {sort_order}
                     LIMIT {traversal_max_returned}
+                    FILTER score >= {traversal_score_threshold}
 
                     FOR chunk IN {graph_name}_SOURCE
                         FILTER chunk._key == edge.source_id
@@ -267,16 +282,17 @@ class OpeaArangoRetriever(OpeaComponent):
 
         query = input.input
         embedding = input.embedding if isinstance(input.embedding, list) else None
-        graph_name = input.graph_name or ARANGO_GRAPH_NAME
-        search_start = input.search_start or ARANGO_SEARCH_START
-        enable_traversal = input.enable_traversal or ARANGO_TRAVERSAL_ENABLED
-        enable_summarizer = input.enable_summarizer or SUMMARIZER_ENABLED
-        distance_strategy = input.distance_strategy or ARANGO_DISTANCE_STRATEGY
-        use_approx_search = input.use_approx_search or ARANGO_USE_APPROX_SEARCH
-        num_centroids = input.num_centroids or ARANGO_NUM_CENTROIDS
-        traversal_max_depth = input.traversal_max_depth or ARANGO_TRAVERSAL_MAX_DEPTH
-        traversal_max_returned = input.traversal_max_returned or ARANGO_TRAVERSAL_MAX_RETURNED
-        traversal_score_threshold = input.traversal_score_threshold or ARANGO_TRAVERSAL_SCORE_THRESHOLD
+        graph_name = getattr(input, "graph_name", ARANGO_GRAPH_NAME)
+        search_start = getattr(input, "search_start", ARANGO_SEARCH_START)
+        enable_traversal = getattr(input, "enable_traversal", ARANGO_TRAVERSAL_ENABLED)
+        enable_summarizer = getattr(input, "enable_summarizer", SUMMARIZER_ENABLED)
+        distance_strategy = getattr(input, "distance_strategy", ARANGO_DISTANCE_STRATEGY)
+        use_approx_search = getattr(input, "use_approx_search", ARANGO_USE_APPROX_SEARCH)
+        num_centroids = getattr(input, "num_centroids", ARANGO_NUM_CENTROIDS)
+        traversal_max_depth = getattr(input, "traversal_max_depth", ARANGO_TRAVERSAL_MAX_DEPTH)
+        traversal_max_returned = getattr(input, "traversal_max_returned", ARANGO_TRAVERSAL_MAX_RETURNED)
+        traversal_score_threshold = getattr(input, "traversal_score_threshold", ARANGO_TRAVERSAL_SCORE_THRESHOLD)
+        traversal_query = getattr(input, "traversal_query", ARANGO_TRAVERSAL_QUERY)
 
         if search_start == "node":
             collection_name = f"{graph_name}_ENTITY"
@@ -431,7 +447,9 @@ class OpeaArangoRetriever(OpeaComponent):
                 collection_name=collection_name,
                 traversal_max_depth=traversal_max_depth,
                 traversal_max_returned=traversal_max_returned,
-                traversal_score_threshold=traversal_score_threshold
+                traversal_score_threshold=traversal_score_threshold,
+                traversal_query=traversal_query,
+                distance_strategy=distance_strategy,
             )
 
             for r in search_res:
