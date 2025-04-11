@@ -1,33 +1,35 @@
 import os
-import time
-from typing import Any, Union
+from typing import Any
 
 import openai
 from arango import ArangoClient
+from arango.database import StandardDatabase
 from langchain_arangodb import ArangoVector
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from comps import CustomLogger, EmbedDoc, OpeaComponent, OpeaComponentRegistry, SearchedDoc, ServiceType
-from comps.cores.proto.api_protocol import ChatCompletionRequest, RetrievalRequest, RetrievalResponse
+from comps import CustomLogger, OpeaComponent, OpeaComponentRegistry, ServiceType
+from comps.cores.proto.api_protocol import RetrievalRequestArangoDB
 
 from .config import (
     ARANGO_DB_NAME,
     ARANGO_DISTANCE_STRATEGY,
-    ARANGO_EMBEDDING_FIELD,
     ARANGO_GRAPH_NAME,
     ARANGO_NUM_CENTROIDS,
     ARANGO_PASSWORD,
-    ARANGO_TEXT_FIELD,
+    ARANGO_SEARCH_START,
     ARANGO_TRAVERSAL_ENABLED,
     ARANGO_TRAVERSAL_MAX_DEPTH,
     ARANGO_TRAVERSAL_MAX_RETURNED,
+    ARANGO_TRAVERSAL_QUERY,
+    ARANGO_TRAVERSAL_SCORE_THRESHOLD,
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
     HUGGINGFACEHUB_API_TOKEN,
     OPENAI_API_KEY,
     OPENAI_CHAT_ENABLED,
+    OPENAI_CHAT_MAX_TOKENS,
     OPENAI_CHAT_MODEL,
     OPENAI_CHAT_TEMPERATURE,
     OPENAI_EMBED_ENABLED,
@@ -46,6 +48,9 @@ from .config import (
 
 logger = CustomLogger("retriever_arango")
 logflag = os.getenv("LOGFLAG", False)
+
+ARANGO_TEXT_FIELD = "text"
+ARANGO_EMBEDDING_FIELD = "embedding"
 
 
 @OpeaComponentRegistry.register("OPEA_RETRIEVER_ARANGO")
@@ -76,7 +81,9 @@ class OpeaArangoRetriever(OpeaComponent):
                 openai.models.list()
                 if logflag:
                     logger.info("OpenAI API Key is valid.")
-                self.llm = ChatOpenAI(temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=512)
+                self.llm = ChatOpenAI(
+                    temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=OPENAI_CHAT_MAX_TOKENS
+                )
             except openai.error.AuthenticationError:
                 if logflag:
                     logger.info("OpenAI API Key is invalid.")
@@ -124,90 +131,187 @@ class OpeaArangoRetriever(OpeaComponent):
 
     def fetch_neighborhoods(
         self,
-        vector_db: ArangoVector,
+        db: StandardDatabase,
         keys: list[str],
         graph_name: str,
-        source_collection_name: str,
+        search_start: str,
+        query_embedding: list[float],
+        collection_name: str,
+        traversal_max_depth: int,
+        traversal_max_returned: int,
+        traversal_score_threshold: float,
+        traversal_query: str,
+        distance_strategy: str,
     ) -> dict[str, Any]:
-        """Fetch neighborhoods of source documents"""
+        """Fetch the neighborhoods of matched documents"""
+
+        if traversal_max_depth < 1:
+            traversal_max_depth = 1
+
+        if traversal_max_returned < 1:
+            traversal_max_returned = 1
+
+        score_func = ""
+        sort_order = ""
+
+        if distance_strategy == "COSINE":
+            score_func = "COSINE_SIMILARITY"
+            sort_order = "DESC"
+        elif distance_strategy == "EUCLIDEAN_DISTANCE":
+            score_func = "L2_DISTANCE"
+            sort_order = "ASC"
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid distance strategy: {distance_strategy}. Expected 'COSINE' or 'EUCLIDEAN_DISTANCE'.",
+            )
+
+        sub_query = ""
         neighborhoods = {}
 
-        if ARANGO_TRAVERSAL_MAX_DEPTH <= 0:
-            start_vertex = "v1"
-            links_to_query = ""
-        else:
-            start_vertex = "v2"
-            links_to_query = f"FOR v2 IN 1..{ARANGO_TRAVERSAL_MAX_DEPTH} ANY v1 {graph_name}_LINKS_TO OPTIONS {{uniqueEdges: 'path'}}"
-
-        if ARANGO_TRAVERSAL_MAX_RETURNED <= 0:
-            limit_query = ""
-        else:
-            limit_query = f"""
-                LET score = COSINE_SIMILARITY(doc.{ARANGO_EMBEDDING_FIELD}, s.{ARANGO_EMBEDDING_FIELD})
-                SORT score DESC
-                LIMIT {ARANGO_TRAVERSAL_MAX_RETURNED}
-            """
-
-        aql = f"""
-            FOR doc IN @@collection
-                FILTER doc._key IN @keys
-
-                LET source_neighborhood = (
-                    FOR v1 IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
-                        {links_to_query}
-                            FOR s IN 1..1 OUTBOUND {start_vertex} {graph_name}_HAS_SOURCE
-                                FILTER s._key != doc._key
-                                {limit_query}
-                                COLLECT id = s._key, text = s.{ARANGO_TEXT_FIELD}
-                                RETURN {{[id]: text}}
-                )
-
-                RETURN {{[doc._key]: source_neighborhood}}
-        """
-
         bind_vars = {
-            "@collection": source_collection_name,
+            "@collection": collection_name,
             "keys": keys,
         }
 
-        cursor = vector_db.db.aql.execute(aql, bind_vars=bind_vars)
+        if traversal_query:
+            sub_query = traversal_query.format(
+                graph_name=graph_name,
+                traversal_max_depth=traversal_max_depth,
+                traversal_max_returned=traversal_max_returned,
+                traversal_score_threshold=traversal_score_threshold,
+                ARANGO_EMBEDDING_FIELD=ARANGO_EMBEDDING_FIELD,
+                ARANGO_TEXT_FIELD=ARANGO_TEXT_FIELD,
+            )
+
+            if "@query_embedding" in sub_query:
+                bind_vars["query_embedding"] = query_embedding
+
+        elif search_start == "chunk":
+            bind_vars["query_embedding"] = query_embedding
+
+            sub_query = f"""
+                FOR node IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
+                    FOR node2, edge IN 1..{traversal_max_depth} ANY node {graph_name}_LINKS_TO
+                        LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
+                        SORT score {sort_order}
+                        LIMIT {traversal_max_returned}
+                        FILTER score >= {traversal_score_threshold}
+                        RETURN edge.{ARANGO_TEXT_FIELD}
+            """
+
+        elif search_start == "edge":
+            sub_query = f"""
+                FOR chunk IN {graph_name}_SOURCE
+                    FILTER chunk._key == doc.source_id
+                    LIMIT 1
+                    RETURN chunk.{ARANGO_TEXT_FIELD}
+            """
+
+        elif search_start == "node":
+            bind_vars["query_embedding"] = query_embedding
+
+            sub_query = f"""
+                FOR node, edge IN 1..{traversal_max_depth} ANY doc {graph_name}_LINKS_TO
+                    LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
+                    SORT score {sort_order}
+                    LIMIT {traversal_max_returned}
+                    FILTER score >= {traversal_score_threshold}
+
+                    FOR chunk IN {graph_name}_SOURCE
+                        FILTER chunk._key == edge.source_id
+                        LIMIT 1
+                        RETURN {{[edge.{ARANGO_TEXT_FIELD}]: chunk.{ARANGO_TEXT_FIELD}}}
+            """
+
+        query = f"""
+            FOR doc IN @@collection
+                FILTER doc._key IN @keys
+
+                LET neighborhood = (
+                    {sub_query}
+                )
+
+                RETURN {{[doc._key]: neighborhood}}
+        """
+
+        if logflag:
+            logger.info(f"Executing query: {query}")
+            logger.info(f"Bind variables: {bind_vars.keys()}")
+
+        cursor = db.aql.execute(query, bind_vars=bind_vars)
 
         for doc in cursor:
             neighborhoods.update(doc)
 
         return neighborhoods
 
-    def generate_prompt(self, query: str, text: str) -> str:
+    def generate_summarization_prompt(self, query: str, text: str) -> str:
         """Generate a prompt for summarization."""
         return f"""
             I've performed vector similarity on the following
             query to retrieve most relevant documents: '{query}' 
 
-            Each retrieved Document may have a 'RELATED INFORMATION' section.
+            Each Document retrieved may have a 'RELATED INFORMATION' section.
 
-            Please consider summarizing the Document below using the query as the foundation to summarize the text.
+            Summarize the Document below using the query as the foundation to your summary.
 
-            The Document: {text}
+            Discard any unrelated information that is not relevant to the query.
+
+            If the Document has a 'RELATED INFORMATION' section, use it to help you summarize the Document.
+
+            The document is as follows:
+
+            ------
+            {text}
+            ------
 
             Provide a summary to include all content relevant to the query, using the RELATED INFORMATION section (if provided) as needed.
 
             Your summary:
         """
 
-    async def invoke(self, input: Union[EmbedDoc, RetrievalRequest, ChatCompletionRequest]) -> list:
+    async def invoke(self, input: RetrievalRequestArangoDB) -> list:
         """Process the retrieval request and return relevant documents."""
         if logflag:
             logger.info(input)
 
-        query = input.text if isinstance(input, EmbedDoc) else input.input
+        #################
+        # Process Input #
+        #################
+
+        query = input.input
         embedding = input.embedding if isinstance(input.embedding, list) else None
+        graph_name = getattr(input, "graph_name", ARANGO_GRAPH_NAME)
+        search_start = getattr(input, "search_start", ARANGO_SEARCH_START)
+        enable_traversal = getattr(input, "enable_traversal", ARANGO_TRAVERSAL_ENABLED)
+        enable_summarizer = getattr(input, "enable_summarizer", SUMMARIZER_ENABLED)
+        distance_strategy = getattr(input, "distance_strategy", ARANGO_DISTANCE_STRATEGY)
+        use_approx_search = getattr(input, "use_approx_search", ARANGO_USE_APPROX_SEARCH)
+        num_centroids = getattr(input, "num_centroids", ARANGO_NUM_CENTROIDS)
+        traversal_max_depth = getattr(input, "traversal_max_depth", ARANGO_TRAVERSAL_MAX_DEPTH)
+        traversal_max_returned = getattr(input, "traversal_max_returned", ARANGO_TRAVERSAL_MAX_RETURNED)
+        traversal_score_threshold = getattr(input, "traversal_score_threshold", ARANGO_TRAVERSAL_SCORE_THRESHOLD)
+        traversal_query = getattr(input, "traversal_query", ARANGO_TRAVERSAL_QUERY)
 
-        ########################
-        # Fetch the Graph Name #
-        ########################
+        if search_start == "node":
+            collection_name = f"{graph_name}_ENTITY"
+        elif search_start == "edge":
+            collection_name = f"{graph_name}_LINKS_TO"
+        elif search_start == "chunk":
+            collection_name = f"{graph_name}_SOURCE"
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid search_start value: {search_start}. Expected 'node', 'edge', or 'chunk'.",
+            )
 
-        graph_name = ARANGO_GRAPH_NAME
-        source_collection_name = f"{graph_name}_SOURCE"
+        if logflag:
+            logger.info(f"Graph name: {graph_name}, Start Collection name: {collection_name}")
+
+        #################
+        # Validate Data #
+        #################
 
         if not self.db.has_graph(graph_name):
             if logflag:
@@ -215,24 +319,27 @@ class OpeaArangoRetriever(OpeaComponent):
                 logger.error(f"Graph '{graph_name}' does not exist in ArangoDB. Graphs: {graph_names}")
             return []
 
-        if not self.db.graph(graph_name).has_vertex_collection(source_collection_name):
+        v_col_exists = self.db.graph(graph_name).has_vertex_collection(collection_name)
+        e_col_exists = self.db.graph(graph_name).has_edge_collection(collection_name)
+
+        if not (v_col_exists or e_col_exists):
             if logflag:
                 collection_names = self.db.graph(graph_name).vertex_collections()
-                m = f"Collection '{source_collection_name}' does not exist in graph '{graph_name}'. Collections: {collection_names}"
+                m = f"Collection '{collection_name}' does not exist in graph '{graph_name}'. Collections: {collection_names}"
                 logger.error(m)
             return []
 
-        collection = self.db.collection(source_collection_name)
+        collection = self.db.collection(collection_name)
         collection_count = collection.count()
 
         if collection_count == 0:
             if logflag:
-                logger.error(f"Collection '{source_collection_name}' is empty.")
+                logger.error(f"Collection '{collection_name}' is empty.")
             return []
 
-        if collection_count < ARANGO_NUM_CENTROIDS:
+        if collection_count < num_centroids:
             if logflag:
-                m = f"Collection '{source_collection_name}' has fewer documents ({collection_count}) than the number of centroids ({ARANGO_NUM_CENTROIDS})."
+                m = f"Collection '{collection_name}' has fewer documents ({collection_count}) than the number of centroids ({num_centroids}). Please adjust the number of centroids."
                 logger.error(m)
             return []
 
@@ -274,11 +381,11 @@ class OpeaArangoRetriever(OpeaComponent):
             embedding=embeddings,
             embedding_dimension=dimension,
             database=self.db,
-            collection_name=source_collection_name,
+            collection_name=collection_name,
             embedding_field=ARANGO_EMBEDDING_FIELD,
             text_field=ARANGO_TEXT_FIELD,
-            distance_strategy=ARANGO_DISTANCE_STRATEGY,
-            num_centroids=ARANGO_NUM_CENTROIDS,
+            distance_strategy=distance_strategy,
+            num_centroids=num_centroids,
         )
 
         ######################
@@ -292,7 +399,7 @@ class OpeaArangoRetriever(OpeaComponent):
                     embedding=embedding,
                     k=input.k,
                     score_threshold=input.score_threshold,
-                    use_approx=ARANGO_USE_APPROX_SEARCH,
+                    use_approx=use_approx_search,
                 )
                 search_res = [doc for doc, _ in docs_and_similarities]
             elif input.search_type == "mmr":
@@ -302,14 +409,14 @@ class OpeaArangoRetriever(OpeaComponent):
                     k=input.k,
                     fetch_k=input.fetch_k,
                     lambda_mult=input.lambda_mult,
-                    use_approx=ARANGO_USE_APPROX_SEARCH,
+                    use_approx=use_approx_search,
                 )
             else:
                 search_res = await vector_db.asimilarity_search(
                     query=query,
                     embedding=embedding,
                     k=input.k,
-                    use_approx=ARANGO_USE_APPROX_SEARCH,
+                    use_approx=use_approx_search,
                 )
         except Exception as e:
             if logflag:
@@ -328,12 +435,21 @@ class OpeaArangoRetriever(OpeaComponent):
         # Traverse Source Documents (optional) #
         ########################################
 
-        if ARANGO_TRAVERSAL_ENABLED:
+        if enable_traversal:
+            keys = [r.id for r in search_res]
+
             neighborhoods = self.fetch_neighborhoods(
-                vector_db=vector_db,
-                keys=[r.id for r in search_res],
+                db=vector_db.db,
+                keys=keys,
                 graph_name=graph_name,
-                source_collection_name=source_collection_name,
+                search_start=search_start,
+                query_embedding=embedding,
+                collection_name=collection_name,
+                traversal_max_depth=traversal_max_depth,
+                traversal_max_returned=traversal_max_returned,
+                traversal_score_threshold=traversal_score_threshold,
+                traversal_query=traversal_query,
+                distance_strategy=distance_strategy,
             )
 
             for r in search_res:
@@ -349,9 +465,9 @@ class OpeaArangoRetriever(OpeaComponent):
         # Summarize Results (optional) #
         ################################
 
-        if SUMMARIZER_ENABLED:
+        if enable_summarizer:
             for r in search_res:
-                prompt = self.generate_prompt(query, r.page_content)
+                prompt = self.generate_summarization_prompt(query, r.page_content)
                 res = self.llm.invoke(prompt)
                 summarized_text = res.content
 

@@ -363,6 +363,7 @@ class OpeaArangoDataprep(OpeaComponent):
             process_table (bool, optional): Whether to process tables in PDFs. Defaults to Form(False).
             table_strategy (str, optional): The strategy to process tables in PDFs. Defaults to Form("fast").
         """
+
         if logflag:
             logger.info(f"files:{files}")
             logger.info(f"link_list:{link_list}")

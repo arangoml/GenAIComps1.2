@@ -36,6 +36,7 @@ from comps import (
 from comps.cores.proto.api_protocol import (
     ChatCompletionRequest,
     RetrievalRequest,
+    RetrievalRequestArangoDB,
     RetrievalResponse,
     RetrievalResponseData,
 )
@@ -60,7 +61,7 @@ loader = OpeaComponentLoader(
 )
 @register_statistics(names=["opea_service@retrievers"])
 async def retrieve_docs(
-    input: Union[EmbedDoc, EmbedMultimodalDoc, RetrievalRequest, ChatCompletionRequest]
+    input: Union[EmbedDoc, EmbedMultimodalDoc, RetrievalRequest, RetrievalRequestArangoDB, ChatCompletionRequest]
 ) -> Union[SearchedDoc, SearchedMultimodalDoc, RetrievalResponse, ChatCompletionRequest]:
     start = time.time()
 
