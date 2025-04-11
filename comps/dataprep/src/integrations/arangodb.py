@@ -77,6 +77,7 @@ ALLOWED_RELATIONSHIPS = os.getenv("ALLOWED_RELATIONSHIPS", [])
 NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", ["description"])
 RELATIONSHIP_PROPERTIES = os.getenv("RELATIONSHIP_PROPERTIES", ["description"])
 ENTITY_CAPITALIZATION_STRATEGY = os.getenv("ENTITY_CAPITALIZATION_STRATEGY", "upper")
+INCLUDE_SOURCE = os.getenv("INCLUDE_SOURCE", "true").lower() == "true"
 
 
 @OpeaComponentRegistry.register("OPEA_DATAPREP_ARANGODB")
@@ -318,7 +319,7 @@ class OpeaArangoDataprep(OpeaComponent):
 
             self.graph.add_graph_documents(
                 graph_documents=[graph_doc],
-                include_source=True,
+                include_source=INCLUDE_SOURCE,
                 graph_name=graph_name,
                 update_graph_definition_if_exists=False,
                 batch_size=ARANGO_BATCH_SIZE,
